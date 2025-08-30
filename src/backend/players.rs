@@ -1,15 +1,12 @@
-use core::str;
-
 use bevy::prelude::*;
 
-use crate::backend::{AppState, Class};
+use crate::backend::{AppState, Class, PlayerCount};
 
 pub struct PlayerSpawningPlugin;
 
 impl Plugin for PlayerSpawningPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<PlayerCreated>();
-        app.add_event::<PlayerCount>();
         app.add_event::<PlayerCreationInstructions>();
 
         app.add_observer(spawn_player_entities);
@@ -32,15 +29,6 @@ impl PlayerID {
     pub fn id(&self) -> u8 {
         self.0
     }
-}
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Event)]
-#[repr(u8)]
-pub enum PlayerCount {
-    Two = 2,
-    Three = 3,
-    Four = 4,
-    Five = 5,
-    Six = 6,
 }
 
 fn spawn_player_entities(
