@@ -1,14 +1,30 @@
-use bevy::{color::palettes::tailwind, prelude::*};
+use bevy::{
+    color::palettes::{css, tailwind},
+    prelude::*,
+};
 
-use crate::backend::ThemeColorId;
+use crate::backend::{Class, ThemeColorId};
 
+pub struct ThemePlugin;
+
+impl Plugin for ThemePlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<Theme>();
+    }
+}
+#[derive(Debug, Resource, Default)]
 pub enum Theme {
+    #[default]
     Default,
 }
 
 pub trait ColorTools {
     fn color(&self, theme: Theme) -> Color {
-        todo!()
+        let srgba = match theme {
+            Theme::Default => css::MAGENTA, // replace this branch with a match arm for self.
+        };
+
+        srgba.into()
     }
 }
 
@@ -26,6 +42,20 @@ impl ColorTools for ThemeColorId {
                 ThemeColorId::Choice8 => tailwind::RED_900,
                 ThemeColorId::Choice9 => tailwind::ZINC_800,
                 ThemeColorId::Choice10 => tailwind::SLATE_900,
+            },
+        };
+
+        srgba.into()
+    }
+}
+
+impl ColorTools for Class {
+    fn color(&self, theme: Theme) -> Color {
+        let srgba = match theme {
+            Theme::Default => match self {
+                Class::Class1 => tailwind::VIOLET_800,
+                Class::Class2 => tailwind::TEAL_700,
+                Class::Class3 => tailwind::GREEN_800,
             },
         };
 

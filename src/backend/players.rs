@@ -8,21 +8,22 @@ impl Plugin for PlayerSpawningPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<PlayerCreated>();
         app.add_event::<PlayerCreationInstructions>();
+        app.add_event::<SetNextPlayerAsActive>();
 
         app.add_observer(spawn_player_entities);
         app.add_observer(add_core_player_components);
+        app.add_observer(set_next_player_as_active);
+
+        app.init_resource::<AvailibleThemeColors>();
+
+        app.add_systems(OnEnter(AppState::PlayerCreation), set_p1_as_active);
     }
 }
 
 #[derive(Resource, Debug)]
-pub struct LivingPlayerIDs(Vec<PlayerID>);
-
-#[derive(Resource, Debug)]
 pub struct ActivePlayer(pub Entity);
 
-pub struct GoToNextPlayer;
-
-#[derive(Debug, Component)]
+#[derive(Debug, Component, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PlayerID(u8);
 
 impl PlayerID {
@@ -36,13 +37,9 @@ fn spawn_player_entities(
     mut commands: Commands,
     mut state: ResMut<NextState<AppState>>,
 ) {
-    let mut ids: Vec<PlayerID> = Vec::new();
-
     for id in 0..*trigger.event() as u8 {
-        commands.spawn(PlayerID(id));
-        ids.push(PlayerID(id));
+        let entity = commands.spawn(PlayerID(id)).id();
     }
-    commands.insert_resource(LivingPlayerIDs(ids));
     state.set(AppState::PlayerCreation);
 }
 
@@ -108,4 +105,43 @@ fn add_core_player_components(
     }
 
     commands.trigger(PlayerCreated(trigger.entity));
+}
+
+#[derive(Debug, Event)]
+pub struct SetNextPlayerAsActive;
+
+fn set_next_player_as_active(
+    trigger: Trigger<SetNextPlayerAsActive>,
+    mut active: ResMut<ActivePlayer>,
+    all_players: Query<(Entity, &PlayerID)>,
+) {
+    let Ok((current_ent, current_id)) = all_players.get(active.0) else {
+        panic!("The active player had no player id!")
+    };
+
+    let mut lowest = (current_ent, current_id);
+    let mut higher = (current_ent, current_id);
+
+    for (ent, id) in all_players.iter() {
+        if id < lowest.1 {
+            lowest = (ent, id)
+        } else if id <= higher.1 && id > current_id {
+            higher = (ent, id)
+        }
+    }
+
+    if higher.1 != current_id {
+        active.0 = higher.0;
+    } else {
+        active.0 = lowest.0
+    }
+}
+
+fn set_p1_as_active(mut commands: Commands, players: Query<(Entity, &PlayerID)>) {
+    for (ent, id) in players.iter() {
+        if id.0 == 0 {
+            commands.insert_resource(ActivePlayer(ent));
+            break;
+        }
+    }
 }

@@ -1,12 +1,11 @@
 use bevy::{
-    color::{
-        self,
-        palettes::tailwind::{self, SLATE_700},
-    },
+    color::palettes::tailwind::{self, *},
     prelude::*,
 };
 
-use crate::backend::{AppState, BOARD_SIZES, BoardSize, PLAYER_COUNTS, PlayerCount};
+use crate::backend::{
+    AppState, BOARD_SIZES, BoardSize, PLAYER_COUNTS, PlayerCount, SetupInstructions,
+};
 
 pub struct StartScreen;
 
@@ -26,35 +25,13 @@ impl Plugin for StartScreen {
             (
                 update_selected_player_count_node,
                 update_selected_board_size_node,
+                add_start_button,
             )
                 .run_if(in_state(AppState::GameParameters)),
         );
+        app.add_systems(OnExit(AppState::GameParameters), destroy_screen);
     }
 }
-
-// (
-//     Button,
-//     StartGameButton,
-//     Node {
-//         width: Val::Px(200.0),
-//         height: Val::Px(70.0),
-//         align_items: AlignItems::Center,
-//         justify_content: JustifyContent::Center,
-//         border: UiRect::all(Val::Px(3.0)),
-//         ..default()
-//     },
-//     BackgroundColor(tailwind::ZINC_600.into()),
-//     BorderColor(tailwind::ZINC_300.into()),
-//     BorderRadius::all(Val::Px(1000.0)),
-//     children![(
-//         Text::new("Start"),
-//         TextFont {
-//             font_size: 60.0,
-//             ..default()
-//         },
-//         TextColor(tailwind::ZINC_300.into())
-//     )]
-// )
 
 #[derive(Debug, Component)]
 struct BoardSizePanel;
@@ -332,5 +309,77 @@ fn update_selected_board_size_node(
                 border.0 = SELECTED_BORDER;
             }
         }
+    }
+}
+
+fn add_start_button(
+    size_selected: Option<Res<SelectedBoardSizeNode>>,
+    player_selected: Option<Res<SelectedPlayerCountNode>>,
+    root: Single<Entity, With<RootNode>>,
+    mut commands: Commands,
+) {
+    let Some(size) = size_selected else {
+        return;
+    };
+    let Some(players) = player_selected else {
+        return;
+    };
+
+    if size.is_added() || players.is_added() {
+        commands
+            .spawn((
+                ChildOf(root.into_inner()),
+                (
+                    Button,
+                    StartGameButton,
+                    Node {
+                        width: Val::Px(180.0),
+                        height: Val::Px(60.0),
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::Center,
+                        border: UiRect::all(Val::Px(3.0)),
+                        ..default()
+                    },
+                    BackgroundColor(tailwind::ZINC_600.into()),
+                    BorderColor(tailwind::ZINC_300.into()),
+                    BorderRadius::all(Val::Px(1000.0)),
+                    children![(
+                        Text::new("Start"),
+                        TextFont {
+                            font_size: 50.0,
+                            ..default()
+                        },
+                        TextColor(tailwind::ZINC_300.into())
+                    )],
+                ),
+            ))
+            .observe(start_game_observer);
+    }
+}
+
+fn start_game_observer(
+    trigger: Trigger<Pointer<Click>>,
+    mut commands: Commands,
+    player: Res<SelectedPlayerCountNode>,
+    size: Res<SelectedBoardSizeNode>,
+    player_counts: Query<&PlayerCount>,
+    sizes: Query<&BoardSize>,
+) {
+    commands.entity(trigger.target()).despawn();
+
+    let Ok(count) = player_counts.get(player.0) else {
+        panic!("The SlectedPlayerCountNode had no playercount component.")
+    };
+
+    let Ok(size) = sizes.get(size.0) else {
+        panic!("The SlectedBoardSizeNode had no BoardSize component.")
+    };
+
+    commands.trigger(SetupInstructions::new(*count, *size));
+}
+
+fn destroy_screen(mut commands: Commands, nodes: Query<Entity, With<Node>>) {
+    for node in nodes.iter() {
+        commands.entity(node).despawn();
     }
 }

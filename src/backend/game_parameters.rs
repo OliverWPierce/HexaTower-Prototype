@@ -1,5 +1,3 @@
-use std::process::Command;
-
 use bevy::prelude::*;
 
 pub struct GameParameters;
@@ -17,6 +15,15 @@ impl Plugin for GameParameters {
 pub struct SetupInstructions {
     player_count: PlayerCount,
     board_size: BoardSize,
+}
+
+impl SetupInstructions {
+    pub fn new(players: PlayerCount, size: BoardSize) -> Self {
+        SetupInstructions {
+            player_count: players,
+            board_size: size,
+        }
+    }
 }
 
 pub const PLAYER_COUNTS: [PlayerCount; 5] = [
