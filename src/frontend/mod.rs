@@ -4,7 +4,7 @@ pub struct InputAndGraphics;
 
 impl Plugin for InputAndGraphics {
     fn build(&self, app: &mut App) {
-        app.add_plugins((StartScreen, UiCam, ThemePlugin));
+        app.add_plugins((StartScreen, UiCam, ThemePlugin, PlayerCreation));
     }
 }
 

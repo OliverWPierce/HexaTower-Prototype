@@ -19,7 +19,7 @@ pub enum Theme {
 }
 
 pub trait ColorTools {
-    fn color(&self, theme: Theme) -> Color {
+    fn color(&self, theme: &Theme) -> Color {
         let srgba = match theme {
             Theme::Default => css::MAGENTA, // replace this branch with a match arm for self.
         };
@@ -29,7 +29,7 @@ pub trait ColorTools {
 }
 
 impl ColorTools for ThemeColorId {
-    fn color(&self, theme: Theme) -> Color {
+    fn color(&self, theme: &Theme) -> Color {
         let srgba = match theme {
             Theme::Default => match self {
                 ThemeColorId::Choice1 => tailwind::ROSE_700,
@@ -50,7 +50,7 @@ impl ColorTools for ThemeColorId {
 }
 
 impl ColorTools for Class {
-    fn color(&self, theme: Theme) -> Color {
+    fn color(&self, theme: &Theme) -> Color {
         let srgba = match theme {
             Theme::Default => match self {
                 Class::Class1 => tailwind::VIOLET_800,

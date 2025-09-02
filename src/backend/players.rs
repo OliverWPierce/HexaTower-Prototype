@@ -68,7 +68,7 @@ pub enum ThemeColorId {
 }
 
 #[derive(Debug, Resource, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AvailibleThemeColors(Vec<ThemeColorId>);
+pub struct AvailibleThemeColors(pub Vec<ThemeColorId>);
 
 impl Default for AvailibleThemeColors {
     fn default() -> Self {
@@ -137,7 +137,7 @@ fn set_next_player_as_active(
     }
 }
 
-fn set_p1_as_active(mut commands: Commands, players: Query<(Entity, &PlayerID)>) {
+pub fn set_p1_as_active(mut commands: Commands, players: Query<(Entity, &PlayerID)>) {
     for (ent, id) in players.iter() {
         if id.0 == 0 {
             commands.insert_resource(ActivePlayer(ent));

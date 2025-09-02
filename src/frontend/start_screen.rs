@@ -378,8 +378,6 @@ fn start_game_observer(
     commands.trigger(SetupInstructions::new(*count, *size));
 }
 
-fn destroy_screen(mut commands: Commands, nodes: Query<Entity, With<Node>>) {
-    for node in nodes.iter() {
-        commands.entity(node).despawn();
-    }
+fn destroy_screen(mut commands: Commands, nodes: Single<Entity, With<RootNode>>) {
+    commands.entity(nodes.into_inner()).despawn();
 }
