@@ -62,3 +62,17 @@ impl ColorTools for Class {
         srgba.into()
     }
 }
+
+pub trait DisplayName {
+    fn display_text(&self) -> String;
+}
+impl DisplayName for Class {
+    fn display_text(&self) -> String {
+        let x = match self {
+            Class::Class1 => "Magic",
+            Class::Class2 => "Tech",
+            Class::Class3 => "Agriculture",
+        };
+        x.into()
+    }
+}
