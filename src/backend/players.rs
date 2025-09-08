@@ -45,9 +45,9 @@ fn spawn_player_entities(
 
 #[derive(Debug, Clone, Copy, PartialEq, Event)]
 pub struct PlayerCreationInstructions {
-    entity: Entity,
-    class: Class,
-    color: ThemeColorId,
+    pub entity: Entity,
+    pub class: Class,
+    pub color: ThemeColorId,
 }
 
 #[derive(Debug, Event)]
@@ -113,27 +113,28 @@ pub struct SetNextPlayerAsActive;
 fn set_next_player_as_active(
     trigger: Trigger<SetNextPlayerAsActive>,
     mut active: ResMut<ActivePlayer>,
-    all_players: Query<(Entity, &PlayerID)>,
+    player_ids: Query<&PlayerID>,
+    players: Query<(Entity, &PlayerID)>,
 ) {
-    let Ok((current_ent, current_id)) = all_players.get(active.0) else {
-        panic!("The active player had no player id!")
+    let active_id = player_ids
+        .get(active.0)
+        .expect("the active player had no id");
+
+    let next_player_id = if let Some(id) = player_ids.iter().filter(|x| x > &active_id).min() {
+        id
+    } else {
+        player_ids.iter().min().unwrap() // we already checked that at least one player exists.
     };
 
-    let mut lowest = (current_ent, current_id);
-    let mut higher = (current_ent, current_id);
-
-    for (ent, id) in all_players.iter() {
-        if id < lowest.1 {
-            lowest = (ent, id)
-        } else if id <= higher.1 && id > current_id {
-            higher = (ent, id)
-        }
+    if next_player_id == active_id {
+        error!("The active player was chosen to be the next active player.")
     }
 
-    if higher.1 != current_id {
-        active.0 = higher.0;
-    } else {
-        active.0 = lowest.0
+    for (ent, id) in players {
+        if id == next_player_id {
+            active.0 = ent;
+            return;
+        }
     }
 }
 

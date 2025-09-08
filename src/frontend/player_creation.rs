@@ -1,10 +1,14 @@
 use std::panic;
 
-use bevy::{color::palettes::tailwind, prelude::*};
+use bevy::{
+    color::palettes::{css::RED, tailwind},
+    prelude::*,
+};
 
 use crate::{
     backend::{
-        ActivePlayer, AppState, AvailibleThemeColors, Class, PlayerID, SetNextPlayerAsActive,
+        ActivePlayer, AppState, AvailibleThemeColors, Class, PlayerCreated,
+        PlayerCreationInstructions, PlayerID, SetNextPlayerAsActive, ThemeColorId,
         set_p1_as_active,
     },
     frontend::{ColorTools, DisplayName, Theme},
@@ -16,19 +20,30 @@ impl Plugin for PlayerCreation {
     fn build(&self, app: &mut App) {
         app.add_systems(
             OnEnter(AppState::PlayerCreation),
-            (
-                spawn_framework,
-                player_name,
-                color_options,
-                class_choices,
-                start_selection_timer,
-            )
+            (spawn_framework, class_choices, start_selection_timer)
                 .chain()
                 .after(set_p1_as_active),
         );
         app.add_systems(
             Update,
             (tick_timer, shrink_timer_bar).run_if(in_state(AppState::PlayerCreation)),
+        );
+        app.add_event::<SubmitPlayerData>();
+
+        app.init_resource::<SelectedClassButton>();
+        app.init_resource::<SelectedColorButton>();
+
+        app.add_systems(
+            Update,
+            (start_selection_timer, player_name)
+                .run_if(in_state(AppState::PlayerCreation))
+                .run_if(resource_exists_and_changed::<ActivePlayer>),
+        );
+        app.add_systems(
+            Update,
+            color_options
+                .run_if(in_state(AppState::PlayerCreation))
+                .run_if(resource_changed::<AvailibleThemeColors>),
         );
     }
 }
@@ -169,8 +184,12 @@ fn player_name(
         panic!("The active player had no id")
     };
 
+    let ent = panel.into_inner();
+
+    commands.entity(ent).despawn_related::<Children>();
+
     commands.spawn((
-        ChildOf(panel.into_inner()),
+        ChildOf(ent),
         Text::new(format!("Player{id}")),
         TextFont {
             font_size: 48.0,
@@ -187,6 +206,8 @@ fn color_options(
 ) {
     let panel_ent = panel.into_inner();
     let theme = theme.into_inner();
+
+    commands.entity(panel_ent).despawn_related::<Children>();
 
     for color in colors.into_inner().0.iter() {
         commands.spawn((
@@ -241,7 +262,7 @@ fn class_choices(
 #[derive(Debug, Resource)]
 struct SelectionTimer(Timer);
 
-const TIMER_DURATION: f32 = 10.0;
+const TIMER_DURATION: f32 = 1.0;
 
 fn start_selection_timer(mut commands: Commands) {
     commands.insert_resource(SelectionTimer(Timer::from_seconds(
@@ -254,14 +275,73 @@ fn tick_timer(mut timer: ResMut<SelectionTimer>, mut commands: Commands, time: R
     timer.0.tick(time.delta());
 
     if timer.0.just_finished() {
-        commands.trigger(SetNextPlayerAsActive);
+        commands.run_system_cached(end_selection_turn_and_go_next_player);
     }
 }
 
-fn shrink_timer_bar(mut panel: Single<&mut Node, With<TimerPanel>>, timer: Res<SelectionTimer>) {
+fn shrink_timer_bar(
+    mut panel: Single<(&mut Node, &mut BackgroundColor), With<TimerPanel>>,
+    timer: Res<SelectionTimer>,
+) {
     let percent = (-100.0 / TIMER_DURATION) * timer.0.elapsed_secs() + 100.0;
 
-    panel.width = Val::Percent(percent);
+    panel.0.width = Val::Percent(percent);
+    panel.1.0 = Color::srgb(1.0, 0.0, 0.0).with_saturation((100.0 - percent) / 100.0);
+}
 
-    println!("{}", timer.0.elapsed_secs());
+// Select Characteristics
+
+#[derive(Debug, Event)]
+struct SubmitPlayerData;
+
+#[derive(Debug, Resource, Default)]
+struct SelectedClassButton(Option<Entity>);
+
+#[derive(Debug, Resource, Default)]
+struct SelectedColorButton(Option<Entity>);
+
+use rand::{rng, seq::IndexedRandom};
+
+fn end_selection_turn_and_go_next_player(
+    mut commands: Commands,
+    selected_class: Res<SelectedClassButton>,
+    selected_color: Res<SelectedColorButton>,
+    classes: Query<&Class>,
+    colors: Query<&ThemeColorId>,
+    availible_colors: Res<(AvailibleThemeColors)>,
+    active: Res<ActivePlayer>,
+) {
+    // if there is a selected color, then use it. Else, pick a color from the list.
+    let color = {
+        if let Some(ent) = selected_color.0 {
+            colors
+                .get(ent)
+                .expect("The entity had no ThemeColorId component")
+        } else {
+            availible_colors
+                .0
+                .choose(&mut rng())
+                .expect("There were no more theme colors remaining.")
+        }
+    };
+
+    let class = {
+        if let Some(ent) = selected_class.0 {
+            classes
+                .get(ent)
+                .expect("The entity had no ThemeColorId component")
+        } else {
+            CLASS_CHOICES
+                .choose(&mut rng())
+                .expect("There were no more theme colors remaining.")
+        }
+    };
+
+    commands.trigger(PlayerCreationInstructions {
+        entity: active.0,
+        class: *class,
+        color: *color,
+    });
+
+    commands.trigger(SetNextPlayerAsActive);
 }
