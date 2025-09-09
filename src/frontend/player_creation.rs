@@ -45,6 +45,12 @@ impl Plugin for PlayerCreation {
                 .run_if(in_state(AppState::PlayerCreation))
                 .run_if(resource_changed::<AvailibleThemeColors>),
         );
+        app.add_observer(assign_clicked_to_res);
+
+        app.add_systems(
+            Update,
+            highlight_selected.run_if(in_state(AppState::PlayerCreation)),
+        );
     }
 }
 
@@ -130,7 +136,6 @@ fn spawn_framework(mut commands: Commands) {
                     width: Val::Percent(80.0),
                     ..Default::default()
                 },
-                BackgroundColor(tailwind::ZINC_400.into()),
                 children![
                     (
                         Node {
@@ -221,6 +226,8 @@ fn color_options(
             BorderColor(Color::BLACK),
             BorderRadius::MAX,
             BackgroundColor(color.color(theme)),
+            Button,
+            *color,
         ));
     }
 }
@@ -242,9 +249,14 @@ fn class_choices(
                 height: Val::Percent(25.0),
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
+                border: UiRect::all(Val::Px(5.0)),
                 ..default()
             },
             BackgroundColor(tailwind::SLATE_700.into()),
+            BorderColor(Color::BLACK),
+            BorderRadius::MAX,
+            Button,
+            class,
             children![(
                 Text::new(class.display_text()),
                 TextFont {
@@ -304,11 +316,11 @@ use rand::{rng, seq::IndexedRandom};
 
 fn end_selection_turn_and_go_next_player(
     mut commands: Commands,
-    selected_class: Res<SelectedClassButton>,
-    selected_color: Res<SelectedColorButton>,
+    mut selected_class: ResMut<SelectedClassButton>,
+    mut selected_color: ResMut<SelectedColorButton>,
     classes: Query<&Class>,
     colors: Query<&ThemeColorId>,
-    availible_colors: Res<(AvailibleThemeColors)>,
+    availible_colors: Res<AvailibleThemeColors>,
     active: Res<ActivePlayer>,
 ) {
     // if there is a selected color, then use it. Else, pick a color from the list.
@@ -343,5 +355,46 @@ fn end_selection_turn_and_go_next_player(
         color: *color,
     });
 
+    selected_class.0 = None;
+    selected_color.0 = None;
+
     commands.trigger(SetNextPlayerAsActive);
+}
+
+#[derive(Debug, Component)]
+struct Highlight;
+
+fn assign_clicked_to_res(
+    trigger: Trigger<Pointer<Click>>,
+    colors: Query<Entity, With<ThemeColorId>>,
+    classes: Query<Entity, With<Class>>,
+    mut selected_color: ResMut<SelectedColorButton>,
+    mut selected_class: ResMut<SelectedClassButton>,
+) {
+    let clicked = trigger.target();
+
+    if let Ok(color_button) = colors.get(clicked) {
+        selected_color.0 = Some(color_button);
+    } else if let Ok(class_button) = classes.get(clicked) {
+        selected_class.0 = Some(class_button);
+    }
+}
+
+fn highlight_selected(
+    color_button: Res<SelectedColorButton>,
+    class_button: Res<SelectedClassButton>,
+    mut buttons: Query<(Entity, &mut BorderColor)>,
+) {
+    for (ent, mut color) in buttons.iter_mut() {
+        color.0 = Color::BLACK;
+
+        if color_button.0.is_some() && ent == color_button.0.unwrap() {
+            color.0 = Color::WHITE
+        }
+
+        if class_button.0.is_some() && ent == class_button.0.unwrap() {
+            // this is safe because we already checked that the selected button was some.
+            color.0 = Color::WHITE
+        }
+    }
 }
