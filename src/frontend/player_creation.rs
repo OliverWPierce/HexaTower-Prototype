@@ -7,7 +7,7 @@ use bevy::{
 
 use crate::{
     backend::{
-        ActivePlayer, AppState, AvailibleThemeColors, Class, PlayerCreated,
+        ActivePlayer, AppState, AttributesChosen, AvailibleThemeColors, Class,
         PlayerCreationInstructions, PlayerID, SetNextPlayerAsActive, ThemeColorId,
         set_p1_as_active,
     },
@@ -20,7 +20,12 @@ impl Plugin for PlayerCreation {
     fn build(&self, app: &mut App) {
         app.add_systems(
             OnEnter(AppState::PlayerCreation),
-            (spawn_framework, class_choices, start_selection_timer)
+            (
+                spawn_framework,
+                class_choices,
+                color_options,
+                start_selection_timer,
+            )
                 .chain()
                 .after(set_p1_as_active),
         );
@@ -35,7 +40,11 @@ impl Plugin for PlayerCreation {
 
         app.add_systems(
             Update,
-            (start_selection_timer, player_name)
+            (
+                start_selection_timer,
+                player_name,
+                decide_if_done_with_player_creation,
+            )
                 .run_if(in_state(AppState::PlayerCreation))
                 .run_if(resource_exists_and_changed::<ActivePlayer>),
         );
@@ -51,6 +60,8 @@ impl Plugin for PlayerCreation {
             Update,
             highlight_selected.run_if(in_state(AppState::PlayerCreation)),
         );
+
+        app.add_systems(OnExit(AppState::PlayerCreation), cleanup);
     }
 }
 
@@ -66,6 +77,9 @@ struct ColorPanel;
 #[derive(Component, Clone, Copy, Debug)]
 struct TimerPanel;
 
+#[derive(Component)]
+struct RootNode;
+
 fn spawn_framework(mut commands: Commands) {
     commands.spawn((
         Node {
@@ -77,6 +91,7 @@ fn spawn_framework(mut commands: Commands) {
             ..default()
         },
         BackgroundColor(Color::BLACK),
+        RootNode,
         children![
             (
                 Node {
@@ -274,7 +289,7 @@ fn class_choices(
 #[derive(Debug, Resource)]
 struct SelectionTimer(Timer);
 
-const TIMER_DURATION: f32 = 1.0;
+const TIMER_DURATION: f32 = 0.2;
 
 fn start_selection_timer(mut commands: Commands) {
     commands.insert_resource(SelectionTimer(Timer::from_seconds(
@@ -397,4 +412,37 @@ fn highlight_selected(
             color.0 = Color::WHITE
         }
     }
+}
+
+fn decide_if_done_with_player_creation(
+    active: Res<ActivePlayer>,
+    players: Query<Has<AttributesChosen>, With<PlayerID>>,
+    mut state: ResMut<NextState<AppState>>,
+    mut commands: Commands,
+) {
+    let mut all_ready = true;
+
+    for player in players {
+        if !player {
+            all_ready = false;
+            break;
+        }
+    }
+
+    if all_ready {
+        state.set(AppState::InGame);
+        return;
+    }
+
+    if players.get(active.0).expect("the player had no id.") {
+        commands.trigger(SetNextPlayerAsActive);
+    }
+}
+
+fn cleanup(mut commands: Commands, ui_parent: Single<Entity, With<RootNode>>) {
+    commands.entity(ui_parent.entity()).despawn();
+
+    commands.remove_resource::<SelectionTimer>();
+    commands.remove_resource::<SelectedClassButton>();
+    commands.remove_resource::<SelectedColorButton>();
 }

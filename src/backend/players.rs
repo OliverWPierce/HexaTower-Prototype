@@ -87,6 +87,9 @@ impl Default for AvailibleThemeColors {
     }
 }
 
+#[derive(Debug, Component)]
+pub struct AttributesChosen;
+
 fn add_core_player_components(
     trigger: Trigger<PlayerCreationInstructions>,
     mut commands: Commands,
@@ -94,7 +97,7 @@ fn add_core_player_components(
 ) {
     commands
         .entity(trigger.entity)
-        .insert((trigger.color, trigger.class));
+        .insert((trigger.color, trigger.class, AttributesChosen));
 
     // makes sure the color is no longer availible for other players to use.
     for (index, colorid) in availible_colors.0.iter().enumerate() {
