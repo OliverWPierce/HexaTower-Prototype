@@ -9,6 +9,7 @@ impl Plugin for GameLogic {
             RefreshGroupPlugin,
             AppFlow,
             GameParameters,
+            TilesPlugin,
         ));
     }
 }
@@ -20,6 +21,7 @@ mod game_parameters;
 mod gameflow;
 mod players;
 mod shop_refresh_groups;
+mod tiles;
 
 pub use cards::*;
 pub use classes::*;
@@ -27,6 +29,7 @@ pub use game_parameters::*;
 pub use gameflow::*;
 pub use players::*;
 pub use shop_refresh_groups::*;
+pub use tiles::*;
 
 #[derive(Component)]
 #[relationship(relationship_target = GroupCards)]
