@@ -3,8 +3,8 @@ use std::thread::spawn;
 use bevy::{ecs::component::TickCells, math::VectorSpace, prelude::*};
 
 use crate::{
+    backend::VisualOf,
     backend::{AppState, TileReadyForVisual, TilesPlugin, TrueTileLocation},
-    frontend::VisualOf,
 };
 
 pub struct HexagonsPlugin;

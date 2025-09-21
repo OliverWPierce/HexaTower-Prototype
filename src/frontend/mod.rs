@@ -15,14 +15,6 @@ impl Plugin for InputAndGraphics {
     }
 }
 
-#[derive(Debug, Component)]
-#[relationship (relationship_target = AbsoluteData)]
-pub struct VisualOf(pub Entity);
-
-#[derive(Debug, Component)]
-#[relationship_target (relationship = VisualOf)]
-pub struct AbsoluteData(Entity);
-
 mod hexagons;
 mod in_game_ui;
 mod input_reactivity;

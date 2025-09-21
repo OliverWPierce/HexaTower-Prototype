@@ -3,12 +3,9 @@ use std::process::id;
 use HexGridTools::ADJACENTS;
 use bevy::{ecs::relationship, prelude::*, transform::commands};
 
-use crate::{
-    backend::{
-        AppState, BoardSize,
-        tiles::HexGridTools::{GenerationMode, hex_cords},
-    },
-    frontend::VisualOf,
+use crate::backend::{
+    AppState, BoardSize, VisualOf,
+    tiles::HexGridTools::{GenerationMode, hex_cords},
 };
 
 pub struct TilesPlugin;
