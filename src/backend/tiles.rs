@@ -1,10 +1,14 @@
 use std::process::id;
 
-use bevy::prelude::*;
+use HexGridTools::ADJACENTS;
+use bevy::{ecs::relationship, prelude::*, transform::commands};
 
-use crate::backend::{
-    BoardSize,
-    tiles::HexGridTools::{GenerationMode, hex_cords},
+use crate::{
+    backend::{
+        AppState, BoardSize,
+        tiles::HexGridTools::{GenerationMode, hex_cords},
+    },
+    frontend::VisualOf,
 };
 
 pub struct TilesPlugin;
@@ -15,6 +19,12 @@ impl Plugin for TilesPlugin {
             Update,
             test_move.run_if(resource_exists_and_changed::<ActiveTile>),
         );
+        app.add_event::<BasicSpawningDone>();
+        app.add_event::<TileReadyForVisual>();
+        app.add_observer(spawn_tiles);
+        app.add_observer(find_adjacenents);
+
+        app.add_systems(OnEnter(AppState::InGame), create_visual_entities);
     }
 }
 
@@ -83,11 +93,20 @@ fn test_move(tiles: Query<&AdjacentTiles>, active: Res<ActiveTile>, mut commands
 #[derive(Component, Debug)]
 struct RootTile;
 
-#[derive(Component, Debug)]
-struct TrueTileLocation(Vec2);
+#[derive(Component, Debug, Clone, Copy)]
+pub struct TrueTileLocation(Vec2);
+
+impl From<TrueTileLocation> for Vec3 {
+    fn from(value: TrueTileLocation) -> Self {
+        Vec3::new(value.0.x, 0.0, value.0.y)
+    }
+}
+
+#[derive(Debug, Event)]
+struct BasicSpawningDone;
 
 fn spawn_tiles(trigger: Trigger<BoardSize>, mut commands: Commands) {
-    let mut spawned_tiles: Vec<Entity> = Vec::new();
+    let mut is_root = true;
 
     for cords in hex_cords(GenerationMode::TrueHex {
         depth: match *trigger {
@@ -99,8 +118,65 @@ fn spawn_tiles(trigger: Trigger<BoardSize>, mut commands: Commands) {
     })
     .iter()
     {
-        spawned_tiles.push(commands.spawn(TrueTileLocation(*cords)).id());
+        let ent = commands
+            .spawn((
+                TrueTileLocation(*cords),
+                AdjacentTiles([None, None, None, None, None, None]),
+            ))
+            .id();
+
+        if is_root {
+            commands.entity(ent).insert(RootTile);
+            commands.insert_resource(ActiveTile(ent));
+            is_root = false
+        }
     }
+    commands.trigger(BasicSpawningDone);
+}
+
+fn find_adjacenents(
+    trigger: Trigger<BasicSpawningDone>,
+    mut tiles: Query<(&TrueTileLocation, &mut AdjacentTiles, Entity)>,
+) {
+    let mut combinations = tiles.iter_combinations_mut();
+
+    while let Some([(t1_pos, mut t1_adj, t1), (t2_pos, mut t2_adj, t2)]) = combinations.fetch_next()
+    {
+        if Vec2::distance_squared(t1_pos.0, t2_pos.0) < 3.0001 {
+            let vector = t1_pos.0 - t2_pos.0;
+
+            for (id, dir) in ADJACENTS.iter().enumerate() {
+                if dir.dot(vector) >= 0.99 {
+                    t1_adj.0[id] = Some(t2);
+                }
+            }
+
+            let vector = t2_pos.0 - t1_pos.0;
+
+            for (id, dir) in ADJACENTS.iter().enumerate() {
+                if dir.dot(vector) >= 0.99 {
+                    t2_adj.0[id] = Some(t1);
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Event)]
+pub struct TileReadyForVisual(pub Entity);
+
+fn create_visual_entities(
+    mut commands: Commands,
+    tiles: Query<Entity, With<TrueTileLocation>>,
+    mut writer: EventWriter<TileReadyForVisual>,
+) {
+    let mut visuals: Vec<TileReadyForVisual> = Vec::new();
+
+    for entity in tiles {
+        visuals.push(TileReadyForVisual((commands.spawn(VisualOf(entity))).id()));
+    }
+
+    writer.write_batch(visuals);
 }
 
 mod HexGridTools {
