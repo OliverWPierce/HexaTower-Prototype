@@ -11,6 +11,7 @@ impl Plugin for InputAndGraphics {
             PlayerCreation,
             InGameUiPlugin,
             HexagonsPlugin,
+            InputPlugin,
         ));
     }
 }

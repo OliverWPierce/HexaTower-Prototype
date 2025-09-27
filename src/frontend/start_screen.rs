@@ -244,6 +244,8 @@ fn player_count_selector(
     mut commands: Commands,
     selected_count: Option<ResMut<SelectedPlayerCountNode>>,
 ) {
+    //This does not cause a problem for the input system because the observers are attached to the button entities themselves, not the world.
+
     trigger.propagate(false);
 
     if selected_count.is_none() {
@@ -258,6 +260,8 @@ fn board_size_selector(
     mut commands: Commands,
     selected_size: Option<ResMut<SelectedBoardSizeNode>>,
 ) {
+    //This does not cause a problem for the input system because the observers are attached to the button entities themselves, not the world.
+
     trigger.propagate(false);
 
     if selected_size.is_none() {

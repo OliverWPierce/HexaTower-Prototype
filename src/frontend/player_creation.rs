@@ -11,7 +11,7 @@ use crate::{
         PlayerCreationInstructions, PlayerID, SetNextPlayerAsActive, ThemeColorId,
         set_p1_as_active,
     },
-    frontend::{ColorTools, DisplayName, Theme},
+    frontend::{ColorTools, CreationClick, DisplayName, Theme},
 };
 
 pub struct PlayerCreation;
@@ -31,7 +31,7 @@ impl Plugin for PlayerCreation {
         );
         app.add_systems(
             Update,
-            (tick_timer, shrink_timer_bar).run_if(in_state(AppState::PlayerCreation)),
+            (tick_timer, shrink_timer_bar, skip_turn).run_if(in_state(AppState::PlayerCreation)),
         );
         app.add_event::<SubmitPlayerData>();
 
@@ -289,7 +289,7 @@ fn class_choices(
 #[derive(Debug, Resource)]
 struct SelectionTimer(Timer);
 
-const TIMER_DURATION: f32 = 0.2;
+const TIMER_DURATION: f32 = 10.0;
 
 fn start_selection_timer(mut commands: Commands) {
     commands.insert_resource(SelectionTimer(Timer::from_seconds(
@@ -316,6 +316,11 @@ fn shrink_timer_bar(
     panel.1.0 = Color::srgb(1.0, 0.0, 0.0).with_saturation((100.0 - percent) / 100.0);
 }
 
+fn skip_turn(inputs: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
+    if inputs.just_pressed(KeyCode::Space) {
+        commands.run_system_cached(end_selection_turn_and_go_next_player);
+    }
+}
 // Select Characteristics
 
 #[derive(Debug, Event)]
@@ -380,13 +385,13 @@ fn end_selection_turn_and_go_next_player(
 struct Highlight;
 
 fn assign_clicked_to_res(
-    trigger: Trigger<Pointer<Click>>,
+    trigger: Trigger<CreationClick>,
     colors: Query<Entity, With<ThemeColorId>>,
     classes: Query<Entity, With<Class>>,
     mut selected_color: ResMut<SelectedColorButton>,
     mut selected_class: ResMut<SelectedClassButton>,
 ) {
-    let clicked = trigger.target();
+    let clicked = trigger.0;
 
     if let Ok(color_button) = colors.get(clicked) {
         selected_color.0 = Some(color_button);

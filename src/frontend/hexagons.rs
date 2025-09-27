@@ -1,10 +1,9 @@
 use std::thread::spawn;
 
-use bevy::{ecs::component::TickCells, math::VectorSpace, prelude::*};
+use bevy::{ecs::component::TickCells, math::VectorSpace, prelude::*, time::Stopwatch};
 
-use crate::{
-    backend::VisualOf,
-    backend::{AppState, TileReadyForVisual, TilesPlugin, TrueTileLocation},
+use crate::backend::{
+    ActiveTile, AppState, TileReadyForVisual, TilesPlugin, TrueTileLocation, ValidMove, VisualOf,
 };
 
 pub struct HexagonsPlugin;
@@ -13,9 +12,23 @@ impl Plugin for HexagonsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (spawn_hex, tick_spawn_timer, upscale_recent_spawns).run_if(in_state(AppState::InGame)),
+            (
+                spawn_hex,
+                tick_spawn_timer,
+                upscale_recent_spawns,
+                raise_active,
+                raise_valid_moves,
+            )
+                .run_if(in_state(AppState::InGame)),
         );
         app.add_systems(OnEnter(AppState::InGame), spawn_placeholder_cam);
+        app.add_systems(Update, add_stopwatch.run_if(resource_added::<ActiveTile>));
+        app.add_systems(
+            Update,
+            reset_stopwatch
+                .run_if(in_state(AppState::InGame))
+                .run_if(resource_exists_and_changed::<ActiveTile>),
+        );
     }
 }
 #[derive(Debug, Component)]
@@ -23,6 +36,9 @@ struct AwaitVisualSpawnTimer(Timer);
 
 #[derive(Debug, Component)]
 struct VisualTile;
+
+#[derive(Debug, Component)]
+struct TileRing;
 
 fn spawn_hex(
     mut reader: EventReader<TileReadyForVisual>,
@@ -54,7 +70,7 @@ fn spawn_hex(
             },
             basic_tile.clone(),
             VisualTile,
-            children![tile_ring.clone()],
+            children![(tile_ring.clone(), Transform::default(), TileRing)],
         ));
     }
 }
@@ -98,7 +114,7 @@ fn spawn_placeholder_cam(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
         Transform::default()
-            .with_translation(Vec3::new(0.1, 18.0, 0.0))
+            .with_translation(Vec3::new(10.0, 18.0, 0.0))
             .looking_at(Vec3::ZERO, Vec3::Y),
         Camera {
             order: 1,
@@ -115,3 +131,67 @@ fn spawn_placeholder_cam(mut commands: Commands) {
         Transform::default().with_translation(Vec3::new(0.0, 10.0, 0.0)),
     ));
 }
+#[derive(Resource, Debug)]
+struct SelectedHexagonStopwatch(Stopwatch);
+
+fn reset_stopwatch(mut stopwatch: ResMut<SelectedHexagonStopwatch>) {
+    stopwatch.0.reset();
+}
+
+fn add_stopwatch(mut commands: Commands) {
+    commands.insert_resource(SelectedHexagonStopwatch(Stopwatch::new()));
+}
+
+// why use a component here?
+fn raise_active(
+    mut transform: Query<(&mut Transform, &VisualOf)>,
+    time: Res<Time>,
+    mut stopwatch: ResMut<SelectedHexagonStopwatch>,
+    active: Res<ActiveTile>,
+) {
+    const OFFSET: f32 = 1.0;
+    const FREQUENCY: f32 = 2.5;
+    const AMPLITUDE: f32 = 0.3;
+    const INITIAL_SHARPNESS: f32 = 0.1;
+
+    stopwatch.0.tick(time.delta());
+    let t = stopwatch.0.elapsed_secs();
+
+    for (mut transform, visual_of) in transform {
+        if visual_of.0 == active.read() {
+            transform.translation.y = (-INITIAL_SHARPNESS / (t + INITIAL_SHARPNESS))
+                + OFFSET
+                + AMPLITUDE * (FREQUENCY * t).sin();
+            return;
+        }
+    }
+}
+
+fn raise_valid_moves(
+    mut rings: Query<(&mut Transform, &VisualOf), With<TileRing>>,
+    highlighted: Query<&ValidMove>,
+    time: Res<Time>,
+) {
+    const TARGET_HEIGHT: f32 = 1.0;
+    const SPEED: f32 = 0.5;
+
+    for (mut transform, visual_of) in rings.iter_mut() {
+        if highlighted.get(visual_of.0).is_ok() {
+            transform.translation.y = {
+                let this = transform.translation.y;
+                let t = time.delta_secs() * SPEED;
+                this * (1. - t) + TARGET_HEIGHT * t
+            }
+        } else {
+            transform.translation.y = {
+                let this = transform.translation.y;
+                let t = time.delta_secs() * SPEED;
+                this * (1. - t) + 0.0 * t
+            }
+        }
+    }
+}
+
+// A HexagonMesh (with peice and ring children.)
+// The mesh is located at a "y" of negative "CONSTANT" based on how where the center of the tile mesh is.
+// Resource for the active HexagonMesh, which is updated whenever the active tile changes.

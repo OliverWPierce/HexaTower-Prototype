@@ -1,11 +1,11 @@
 use std::process::id;
 
-use HexGridTools::ADJACENTS;
 use bevy::{ecs::relationship, prelude::*, transform::commands};
+use hex_grid_tools::ADJACENTS;
 
 use crate::backend::{
     AppState, BoardSize, VisualOf,
-    tiles::HexGridTools::{GenerationMode, hex_cords},
+    tiles::hex_grid_tools::{GenerationMode, hex_cords},
 };
 
 pub struct TilesPlugin;
@@ -14,7 +14,9 @@ impl Plugin for TilesPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            test_move.run_if(resource_exists_and_changed::<ActiveTile>),
+            test_move
+                .run_if(in_state(AppState::InGame))
+                .run_if(resource_exists_and_changed::<ActiveTile>),
         );
         app.add_event::<BasicSpawningDone>();
         app.add_event::<TileReadyForVisual>();
@@ -44,10 +46,10 @@ impl AdjacentTiles {
 }
 
 #[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Component)]
-struct Highlight;
+pub struct ValidMove;
 
 #[derive(Debug, Resource, PartialEq, Eq, PartialOrd, Ord)]
-struct ActiveTile(Entity);
+pub struct ActiveTile(Entity);
 
 impl ActiveTile {
     pub fn read(&self) -> Entity {
@@ -64,19 +66,19 @@ impl ActiveTile {
 fn test_move(tiles: Query<&AdjacentTiles>, active: Res<ActiveTile>, mut commands: Commands) {
     if let Ok(adjacentcies) = tiles.get(active.read()) {
         if let Some(ent) = adjacentcies.get_ent(0) {
-            commands.entity(ent).insert(Highlight);
+            commands.entity(ent).insert(ValidMove);
             println!("highlighted {ent}");
             if let Ok(adjacentcies) = tiles.get(ent) {
                 if let Some(ent) = adjacentcies.get_ent(0) {
-                    commands.entity(ent).insert(Highlight);
+                    commands.entity(ent).insert(ValidMove);
                     println!("highlighted {ent}");
                     if let Ok(adjacentcies) = tiles.get(ent) {
                         if let Some(ent) = adjacentcies.get_ent(0) {
-                            commands.entity(ent).insert(Highlight);
+                            commands.entity(ent).insert(ValidMove);
                             println!("highlighted {ent}");
                             if let Ok(adjacentcies) = tiles.get(ent) {
                                 if let Some(ent) = adjacentcies.get_ent(0) {
-                                    commands.entity(ent).insert(Highlight);
+                                    commands.entity(ent).insert(ValidMove);
                                     println!("highlighted {ent}");
                                 }
                             }
@@ -176,7 +178,7 @@ fn create_visual_entities(
     writer.write_batch(visuals);
 }
 
-mod HexGridTools {
+mod hex_grid_tools {
     use bevy::prelude::*;
     pub(super) const SQRT3: f32 = 1.7320508;
 
