@@ -2,6 +2,7 @@ use std::process::id;
 
 use bevy::{ecs::relationship, prelude::*, transform::commands};
 use hex_grid_tools::ADJACENTS;
+use rand::{rng, seq::IteratorRandom};
 
 use crate::backend::{
     AppState, BoardSize, VisualOf,
@@ -14,9 +15,7 @@ impl Plugin for TilesPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            test_move
-                .run_if(in_state(AppState::InGame))
-                .run_if(resource_exists_and_changed::<ActiveTile>),
+            (test_move, random_active).run_if(in_state(AppState::InGame)),
         );
         app.add_event::<BasicSpawningDone>();
         app.add_event::<TileReadyForVisual>();
@@ -64,31 +63,13 @@ impl ActiveTile {
 
 // This should highlight the four tiles north of the active one.
 fn test_move(tiles: Query<&AdjacentTiles>, active: Res<ActiveTile>, mut commands: Commands) {
-    if let Ok(adjacentcies) = tiles.get(active.read()) {
-        if let Some(ent) = adjacentcies.get_ent(0) {
-            commands.entity(ent).insert(ValidMove);
-            println!("highlighted {ent}");
-            if let Ok(adjacentcies) = tiles.get(ent) {
-                if let Some(ent) = adjacentcies.get_ent(0) {
-                    commands.entity(ent).insert(ValidMove);
-                    println!("highlighted {ent}");
-                    if let Ok(adjacentcies) = tiles.get(ent) {
-                        if let Some(ent) = adjacentcies.get_ent(0) {
-                            commands.entity(ent).insert(ValidMove);
-                            println!("highlighted {ent}");
-                            if let Ok(adjacentcies) = tiles.get(ent) {
-                                if let Some(ent) = adjacentcies.get_ent(0) {
-                                    commands.entity(ent).insert(ValidMove);
-                                    println!("highlighted {ent}");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+    if let Ok(adjacencies) = tiles.get(active.0) {
+        for entity in adjacencies.0.into_iter().flatten() {
+            commands.entity(entity).insert(ValidMove);
         }
     }
 }
+
 #[derive(Component, Debug)]
 struct RootTile;
 
@@ -98,6 +79,12 @@ pub struct TrueTileLocation(Vec2);
 impl From<TrueTileLocation> for Vec3 {
     fn from(value: TrueTileLocation) -> Self {
         Vec3::new(value.0.x, 0.0, value.0.y)
+    }
+}
+
+impl TrueTileLocation {
+    pub fn read(&self) -> Vec2 {
+        self.0
     }
 }
 
@@ -127,7 +114,8 @@ fn spawn_tiles(trigger: Trigger<BoardSize>, mut commands: Commands) {
         if is_root {
             commands.entity(ent).insert(RootTile);
             commands.insert_resource(ActiveTile(ent));
-            is_root = false
+            is_root = false;
+            println!("root is at {cords}");
         }
     }
     commands.trigger(BasicSpawningDone);
@@ -141,23 +129,38 @@ fn find_adjacenents(
 
     while let Some([(t1_pos, mut t1_adj, t1), (t2_pos, mut t2_adj, t2)]) = combinations.fetch_next()
     {
-        if Vec2::distance_squared(t1_pos.0, t2_pos.0) < 3.0001 {
-            let vector = t1_pos.0 - t2_pos.0;
+        if Vec2::distance_squared(t1_pos.0, t2_pos.0) < 4.0001 {
+            let v1 = (t1_pos.0 - t2_pos.0).normalize();
 
             for (id, dir) in ADJACENTS.iter().enumerate() {
-                if dir.dot(vector) >= 0.99 {
+                if dir.normalize().dot(v1) >= 0.9 {
                     t1_adj.0[id] = Some(t2);
                 }
             }
 
-            let vector = t2_pos.0 - t1_pos.0;
+            let v2 = (t2_pos.0 - t1_pos.0).normalize();
 
             for (id, dir) in ADJACENTS.iter().enumerate() {
-                if dir.dot(vector) >= 0.99 {
+                if dir.normalize().dot(v2) >= 0.9 {
                     t2_adj.0[id] = Some(t1);
                 }
             }
         }
+    }
+}
+
+fn random_active(
+    inputs: Res<ButtonInput<KeyCode>>,
+    mut active: ResMut<ActiveTile>,
+    tiles: Query<Entity, With<AdjacentTiles>>,
+) {
+    if inputs.just_pressed(KeyCode::Space) {
+        let new = tiles
+            .iter()
+            .choose(&mut rand::rng())
+            .expect("no tiles existed.");
+
+        active.set(new);
     }
 }
 
@@ -212,7 +215,7 @@ mod hex_grid_tools {
     fn true_hex_generation(depth: u32) -> Vec<Vec2> {
         let mut to_examine = vec![ExaminedLocation {
             iteration: 1,
-            cords: vec2(0.0, 0.0),
+            cords: vec2(0.0, 0.0), // this is the root hexagon
         }];
         let mut generated = vec![vec2(0.0, 0.0)];
 

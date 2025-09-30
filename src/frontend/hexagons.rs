@@ -46,11 +46,15 @@ fn spawn_hex(
     visual_tiles: Query<&VisualOf>,
     backend_tiles: Query<&TrueTileLocation>,
     asset_server: ResMut<AssetServer>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let basic_tile =
         SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("BasicTile.glb")));
     let tile_ring =
         SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("TileHighlightRing.glb")));
+
+    const SQRT3: f32 = 1.7320508;
 
     for (id, TileReadyForVisual(visual)) in reader.read().enumerate() {
         let tile_location = if let Ok(VisualOf(tile)) = visual_tiles.get(*visual) {
@@ -68,7 +72,35 @@ fn spawn_hex(
                 rotation: Quat::default(),
                 scale: Vec3::splat(0.0),
             },
+            MeshMaterial3d(materials.add(Color::Srgba(Srgba {
+                red: if true {
+                    tile_location
+                        .read()
+                        .normalize()
+                        .dot(vec2(1.5, 0.5 * SQRT3).normalize())
+                } else {
+                    0.0
+                },
+                green: if true {
+                    tile_location
+                        .read()
+                        .normalize()
+                        .dot(vec2(0.0, SQRT3).normalize())
+                } else {
+                    0.0
+                },
+                blue: if true {
+                    tile_location
+                        .read()
+                        .normalize()
+                        .dot(vec2(-1.5, 0.5 * SQRT3).normalize())
+                } else {
+                    0.0
+                },
+                alpha: 1.0,
+            }))),
             basic_tile.clone(),
+            Mesh3d(meshes.add((Cuboid::new(1.0, 0.2, 1.0)))),
             VisualTile,
             children![(tile_ring.clone(), Transform::default(), TileRing)],
         ));
@@ -168,7 +200,7 @@ fn raise_active(
 }
 
 fn raise_valid_moves(
-    mut rings: Query<(&mut Transform, &VisualOf), With<TileRing>>,
+    mut rings: Query<(&mut Transform, &VisualOf), With<VisualTile>>,
     highlighted: Query<&ValidMove>,
     time: Res<Time>,
 ) {
