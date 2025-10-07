@@ -5,7 +5,7 @@ use hex_grid_tools::ADJACENTS;
 use rand::{rng, seq::IteratorRandom};
 
 use crate::backend::{
-    AppState, BoardSize, VisualOf,
+    AppState, BoardSize,
     tiles::hex_grid_tools::{GenerationMode, hex_cords},
 };
 
@@ -15,14 +15,14 @@ impl Plugin for TilesPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (test_move, random_active).run_if(in_state(AppState::InGame)),
+            (test_move, random_active, select_directions).run_if(in_state(AppState::InGame)),
         );
         app.add_event::<BasicSpawningDone>();
-        app.add_event::<TileReadyForVisual>();
+        app.add_event::<TileCreated>();
         app.add_observer(spawn_tiles);
         app.add_observer(find_adjacenents);
 
-        app.add_systems(OnEnter(AppState::InGame), create_visual_entities);
+        app.init_resource::<LookingDirection>();
     }
 }
 
@@ -40,6 +40,14 @@ impl AdjacentTiles {
             panic!("A tile id was asked for that was not a number within 0-5.")
         } else {
             self.0[direction]
+        }
+    }
+    pub fn in_direction(&self, direction: u32, offset: i32) -> Option<Entity> {
+        if direction >= 6 {
+            panic!("A hex direction was asked for that was not a number within 0-5.")
+        } else {
+            let with_offset = (direction as i32 + 6 + offset % 6) % 6;
+            self.0[with_offset as usize]
         }
     }
 }
@@ -61,12 +69,32 @@ impl ActiveTile {
     }
 }
 
+#[derive(Resource, Debug, Default)]
+struct LookingDirection(i32);
+
 // This should highlight the four tiles north of the active one.
-fn test_move(tiles: Query<&AdjacentTiles>, active: Res<ActiveTile>, mut commands: Commands) {
-    if let Ok(adjacencies) = tiles.get(active.0) {
-        for entity in adjacencies.0.into_iter().flatten() {
-            commands.entity(entity).insert(ValidMove);
-        }
+fn test_move(
+    tiles: Query<&AdjacentTiles>,
+    active: Res<ActiveTile>,
+    mut commands: Commands,
+    direction: Res<LookingDirection>,
+) {
+    let Ok(adjacentcies) = tiles.get(active.read()) else {
+        return;
+    };
+    let Some(ent) = adjacentcies.in_direction(0, direction.0) else {
+        return;
+    };
+    commands.entity(ent).insert(ValidMove);
+}
+
+fn select_directions(input: Res<ButtonInput<KeyCode>>, mut direction: ResMut<LookingDirection>) {
+    if input.just_pressed(KeyCode::ArrowLeft) {
+        direction.0 -= 1
+    }
+
+    if input.just_pressed(KeyCode::ArrowRight) {
+        direction.0 += 1
     }
 }
 
@@ -74,15 +102,15 @@ fn test_move(tiles: Query<&AdjacentTiles>, active: Res<ActiveTile>, mut commands
 struct RootTile;
 
 #[derive(Component, Debug, Clone, Copy)]
-pub struct TrueTileLocation(Vec2);
+pub struct TileLocation(Vec2);
 
-impl From<TrueTileLocation> for Vec3 {
-    fn from(value: TrueTileLocation) -> Self {
+impl From<TileLocation> for Vec3 {
+    fn from(value: TileLocation) -> Self {
         Vec3::new(value.0.x, 0.0, value.0.y)
     }
 }
 
-impl TrueTileLocation {
+impl TileLocation {
     pub fn read(&self) -> Vec2 {
         self.0
     }
@@ -91,7 +119,14 @@ impl TrueTileLocation {
 #[derive(Debug, Event)]
 struct BasicSpawningDone;
 
-fn spawn_tiles(trigger: Trigger<BoardSize>, mut commands: Commands) {
+#[derive(Debug, Event)]
+pub struct TileCreated(pub Entity);
+
+fn spawn_tiles(
+    trigger: Trigger<BoardSize>,
+    mut writer: EventWriter<TileCreated>,
+    mut commands: Commands,
+) {
     let mut is_root = true;
 
     for cords in hex_cords(GenerationMode::TrueHex {
@@ -106,10 +141,12 @@ fn spawn_tiles(trigger: Trigger<BoardSize>, mut commands: Commands) {
     {
         let ent = commands
             .spawn((
-                TrueTileLocation(*cords),
+                TileLocation(*cords),
                 AdjacentTiles([None, None, None, None, None, None]),
             ))
             .id();
+
+        writer.write(TileCreated(ent));
 
         if is_root {
             commands.entity(ent).insert(RootTile);
@@ -123,7 +160,7 @@ fn spawn_tiles(trigger: Trigger<BoardSize>, mut commands: Commands) {
 
 fn find_adjacenents(
     trigger: Trigger<BasicSpawningDone>,
-    mut tiles: Query<(&TrueTileLocation, &mut AdjacentTiles, Entity)>,
+    mut tiles: Query<(&TileLocation, &mut AdjacentTiles, Entity)>,
 ) {
     let mut combinations = tiles.iter_combinations_mut();
 
@@ -162,23 +199,6 @@ fn random_active(
 
         active.set(new);
     }
-}
-
-#[derive(Debug, Event)]
-pub struct TileReadyForVisual(pub Entity);
-
-fn create_visual_entities(
-    mut commands: Commands,
-    tiles: Query<Entity, With<TrueTileLocation>>,
-    mut writer: EventWriter<TileReadyForVisual>,
-) {
-    let mut visuals: Vec<TileReadyForVisual> = Vec::new();
-
-    for entity in tiles {
-        visuals.push(TileReadyForVisual((commands.spawn(VisualOf(entity))).id()));
-    }
-
-    writer.write_batch(visuals);
 }
 
 mod hex_grid_tools {

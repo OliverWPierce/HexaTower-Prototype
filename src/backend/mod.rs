@@ -14,14 +14,6 @@ impl Plugin for GameLogic {
     }
 }
 
-#[derive(Debug, Component)]
-#[relationship (relationship_target = AbsoluteData)]
-pub struct VisualOf(pub Entity);
-
-#[derive(Debug, Component)]
-#[relationship_target (relationship = VisualOf)]
-pub struct AbsoluteData(Entity);
-
 mod cards;
 
 mod classes;
