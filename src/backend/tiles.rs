@@ -1,8 +1,6 @@
-use std::process::id;
-
-use bevy::{ecs::relationship, prelude::*, transform::commands};
+use bevy::prelude::*;
 use hex_grid_tools::ADJACENTS;
-use rand::{rng, seq::IteratorRandom};
+use rand::seq::IteratorRandom;
 
 use crate::backend::{
     AppState, BoardSize,
@@ -15,14 +13,17 @@ impl Plugin for TilesPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (test_move, random_active, select_directions).run_if(in_state(AppState::InGame)),
+            (random_active, select_directions).run_if(in_state(AppState::InGame)),
         );
         app.add_event::<BasicSpawningDone>();
         app.add_event::<TileCreated>();
+        app.add_event::<ChangedActiveTile>();
+
         app.add_observer(spawn_tiles);
         app.add_observer(find_adjacenents);
 
         app.init_resource::<LookingDirection>();
+        app.init_resource::<ActiveTile>();
     }
 }
 
@@ -55,38 +56,32 @@ impl AdjacentTiles {
 #[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Component)]
 pub struct ValidMove;
 
-#[derive(Debug, Resource, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ActiveTile(Entity);
+#[derive(Debug, Resource, PartialEq, Eq, PartialOrd, Ord, Default)]
+struct ActiveTile(Option<Entity>);
 
 impl ActiveTile {
-    pub fn read(&self) -> Entity {
+    pub fn read(&self) -> Option<Entity> {
         self.0
     }
 
-    pub fn set(&mut self, new_ent: Entity) {
-        self.0 = new_ent;
-        println!("set the entity {new_ent} to be the active tile.");
+    pub fn set(&mut self, new_state: Option<Entity>, commands: &mut Commands) {
+        commands.send_event(ChangedActiveTile {
+            prev: self.0,
+            new: new_state,
+        });
+
+        self.0 = new_state;
     }
+}
+
+#[derive(Debug, Event)]
+pub struct ChangedActiveTile {
+    pub prev: Option<Entity>,
+    pub new: Option<Entity>,
 }
 
 #[derive(Resource, Debug, Default)]
 struct LookingDirection(i32);
-
-// This should highlight the four tiles north of the active one.
-fn test_move(
-    tiles: Query<&AdjacentTiles>,
-    active: Res<ActiveTile>,
-    mut commands: Commands,
-    direction: Res<LookingDirection>,
-) {
-    let Ok(adjacentcies) = tiles.get(active.read()) else {
-        return;
-    };
-    let Some(ent) = adjacentcies.in_direction(0, direction.0) else {
-        return;
-    };
-    commands.entity(ent).insert(ValidMove);
-}
 
 fn select_directions(input: Res<ButtonInput<KeyCode>>, mut direction: ResMut<LookingDirection>) {
     if input.just_pressed(KeyCode::ArrowLeft) {
@@ -97,9 +92,6 @@ fn select_directions(input: Res<ButtonInput<KeyCode>>, mut direction: ResMut<Loo
         direction.0 += 1
     }
 }
-
-#[derive(Component, Debug)]
-struct RootTile;
 
 #[derive(Component, Debug, Clone, Copy)]
 pub struct TileLocation(Vec2);
@@ -122,14 +114,15 @@ struct BasicSpawningDone;
 #[derive(Debug, Event)]
 pub struct TileCreated(pub Entity);
 
+#[derive(Debug, Component)]
+struct LogicalTileID(usize);
+
 fn spawn_tiles(
     trigger: Trigger<BoardSize>,
     mut writer: EventWriter<TileCreated>,
     mut commands: Commands,
 ) {
-    let mut is_root = true;
-
-    for cords in hex_cords(GenerationMode::TrueHex {
+    for (id, cords) in hex_cords(GenerationMode::TrueHex {
         depth: match *trigger {
             BoardSize::Small => 4,
             BoardSize::Medium => 5,
@@ -138,22 +131,17 @@ fn spawn_tiles(
         },
     })
     .iter()
+    .enumerate()
     {
         let ent = commands
             .spawn((
                 TileLocation(*cords),
                 AdjacentTiles([None, None, None, None, None, None]),
+                LogicalTileID(id),
             ))
             .id();
 
         writer.write(TileCreated(ent));
-
-        if is_root {
-            commands.entity(ent).insert(RootTile);
-            commands.insert_resource(ActiveTile(ent));
-            is_root = false;
-            println!("root is at {cords}");
-        }
     }
     commands.trigger(BasicSpawningDone);
 }
@@ -190,6 +178,7 @@ fn random_active(
     inputs: Res<ButtonInput<KeyCode>>,
     mut active: ResMut<ActiveTile>,
     tiles: Query<Entity, With<AdjacentTiles>>,
+    mut commands: Commands,
 ) {
     if inputs.just_pressed(KeyCode::Space) {
         let new = tiles
@@ -197,7 +186,7 @@ fn random_active(
             .choose(&mut rand::rng())
             .expect("no tiles existed.");
 
-        active.set(new);
+        active.set(Some(new), &mut commands);
     }
 }
 

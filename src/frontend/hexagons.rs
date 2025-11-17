@@ -1,39 +1,25 @@
-use std::thread::spawn;
-
-use bevy::{
-    ecs::component::TickCells, gltf::GltfMaterialName, math::VectorSpace, prelude::*,
-    scene::SceneInstanceReady, time::Stopwatch,
-};
-
 use crate::{
-    backend::{ActiveTile, AppState, TileCreated, TileLocation, ValidMove},
-    frontend::Watches,
+    backend::{AppState, ChangedActiveTile, TileCreated, TileLocation, ValidMove},
+    frontend::{Watches, hexagons},
 };
+
+use bevy::prelude::*;
 
 pub struct HexagonsPlugin;
 
 impl Plugin for HexagonsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, spawn_visuals);
+        app.add_systems(Startup, initialize_handles);
     }
 }
-
-#[derive(Debug, Component)]
-struct Hexagon;
-
-#[derive(Debug, Component)]
-struct Ring;
 
 fn spawn_visuals(
     mut reader: EventReader<TileCreated>,
     mut commands: Commands,
-    server: ResMut<AssetServer>,
+    basic_hex: Res<BasicHexHandle>,
     tiles: Query<&TileLocation>,
 ) {
-    let basic_hex = SceneRoot(server.load(GltfAssetLabel::Scene(0).from_asset("BasicTile.glb")));
-    let hex_ring =
-        SceneRoot(server.load(GltfAssetLabel::Scene(0).from_asset("TileHighlightRing.glb")));
-
     for created in reader.read() {
         let true_pos = tiles
             .get(created.0)
@@ -42,16 +28,32 @@ fn spawn_visuals(
         let translation = Vec3::new(true_pos.x, 0.0, true_pos.y);
 
         commands.spawn((
-            basic_hex.clone(),
-            Hexagon,
             Transform::default().with_translation(translation),
             Watches(created.0),
-            children![(
-                Ring,
-                hex_ring.clone(),
-                Transform::default(),
-                Watches(created.0)
-            )],
+            children![(SceneRoot(basic_hex.0.clone()))],
         ));
     }
+}
+
+#[derive(Resource, Debug)]
+struct BasicHexHandle(Handle<Scene>);
+
+#[derive(Resource, Debug)]
+struct ActiveHexHandle(Handle<Scene>);
+
+#[derive(Resource, Debug)]
+struct ValidHexHandle(Handle<Scene>);
+
+fn initialize_handles(mut commands: Commands, assets: ResMut<AssetServer>) {
+    commands.insert_resource(BasicHexHandle(
+        assets.load(GltfAssetLabel::Scene(0).from_asset("BasicTile.glb")),
+    ));
+
+    commands.insert_resource(ActiveHexHandle(
+        assets.load(GltfAssetLabel::Scene(0).from_asset("ActiveTile.glb")),
+    ));
+
+    commands.insert_resource(ValidHexHandle(
+        assets.load(GltfAssetLabel::Scene(0).from_asset("ValidTile.glb")),
+    ));
 }

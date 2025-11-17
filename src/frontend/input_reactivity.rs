@@ -37,7 +37,6 @@ pub fn clicks(
     match state.into_inner().deref() {
         AppState::GameParameters => {
             commands.trigger(ParameterClick(trigger.target()));
-            println!("Sent a parameter_click event")
         }
         AppState::PlayerCreation => commands.trigger(CreationClick(trigger.target())),
         AppState::InGame => commands.trigger(InGameClick(trigger.target())),
