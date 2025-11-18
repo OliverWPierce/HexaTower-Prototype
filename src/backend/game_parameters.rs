@@ -1,65 +1,35 @@
 use bevy::prelude::*;
 
-pub struct GameParameters;
+pub struct GameParametersPlugin;
 
-impl Plugin for GameParameters {
+impl Plugin for GameParametersPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<PlayerCount>();
-        app.add_event::<SetupInstructions>();
-        app.add_event::<BoardSize>();
-        app.add_observer(start_setup);
+        app.add_event::<CreateGame>();
+        app.add_observer(set_up_resources_and_kickoff_setup_sequence);
     }
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Event)]
-pub struct SetupInstructions {
-    player_count: PlayerCount,
-    board_size: BoardSize,
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Event)]
+pub struct CreateGame {
+    pub board_size: BoardSize,
 }
 
-impl SetupInstructions {
-    pub fn new(players: PlayerCount, size: BoardSize) -> Self {
-        SetupInstructions {
-            player_count: players,
-            board_size: size,
-        }
-    }
+use bevy::ecs::schedule::ScheduleLabel;
+#[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash, Default)]
+pub struct SetUpBoard;
+
+fn set_up_resources_and_kickoff_setup_sequence(
+    event_triggered: Trigger<CreateGame>,
+    mut commands: Commands,
+) {
+    commands.insert_resource(event_triggered.board_size);
+
+    commands.run_schedule(SetUpBoard);
 }
 
-pub const PLAYER_COUNTS: [PlayerCount; 5] = [
-    PlayerCount::Two,
-    PlayerCount::Three,
-    PlayerCount::Four,
-    PlayerCount::Five,
-    PlayerCount::Six,
-];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Event, Component)]
-#[repr(u8)]
-pub enum PlayerCount {
-    Two = 2,
-    Three = 3,
-    Four = 4,
-    Five = 5,
-    Six = 6,
-}
-
-pub const BOARD_SIZES: [BoardSize; 4] = [
-    BoardSize::Small,
-    BoardSize::Medium,
-    BoardSize::Large,
-    BoardSize::ExtraLarge,
-];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Event, Component)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Resource, Clone, Copy)]
 pub enum BoardSize {
     Small,
     Medium,
     Large,
     ExtraLarge,
-}
-
-fn start_setup(trigger: Trigger<SetupInstructions>, mut commands: Commands) {
-    commands.trigger(trigger.player_count);
-    commands.trigger(trigger.board_size);
 }
