@@ -7,6 +7,11 @@ use frontend::InputAndGraphics;
 
 fn main() -> AppExit {
     App::new()
-        .add_plugins((DefaultPlugins, GameLogic, InputAndGraphics))
+        .add_plugins((
+            DefaultPlugins,
+            GameLogic,
+            InputAndGraphics,
+            MeshPickingPlugin,
+        ))
         .run()
 }

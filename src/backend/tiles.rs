@@ -7,15 +7,18 @@ pub struct TilesPlugin;
 
 impl Plugin for TilesPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<LogicalTileCreated>();
+        app.add_message::<LogicalTileCreated>();
+        app.add_message::<LogTileDeleted>();
+        app.add_message::<DeleteTileRequest>();
         app.init_resource::<ActiveTile>();
 
         app.add_systems(SetUpBoard, (spawn_tiles, find_adjacenents).chain());
+        app.add_systems(Update, delete_tiles);
     }
 }
 
 // tiles go counter clockwise, starting from two o'clock.
-#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Component)]
+#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Component, Clone, Copy)]
 pub struct AdjacentTiles([Option<Entity>; 6]);
 
 #[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Component)]
@@ -42,12 +45,12 @@ impl LogicalTileLocation {
 #[derive(Debug, Event)]
 struct BasicSpawningDone;
 
-#[derive(Debug, Event)]
+#[derive(Debug, Message)]
 pub struct LogicalTileCreated(pub Entity);
 
 fn spawn_tiles(
     board_size: Res<BoardSize>,
-    mut writer: EventWriter<LogicalTileCreated>,
+    mut writer: MessageWriter<LogicalTileCreated>,
     mut commands: Commands,
 ) {
     for cords in hex_cords(GenerationMode::TrueHex {
@@ -93,6 +96,44 @@ fn find_adjacenents(mut tiles: Query<(&LogicalTileLocation, &mut AdjacentTiles, 
                     t2_adj.0[id] = Some(t1);
                 }
             }
+        }
+    }
+}
+
+#[derive(Debug, Message, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct DeleteTileRequest(pub Entity);
+
+#[derive(Debug, Message, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct LogTileDeleted(pub Entity);
+
+fn delete_tiles(
+    mut requests: MessageReader<DeleteTileRequest>,
+    mut log_tiles: Query<(Entity, &mut AdjacentTiles)>,
+    mut commands: Commands,
+    mut deleted_writer: MessageWriter<LogTileDeleted>,
+) {
+    for request in requests.read() {
+        if let Ok((entity_to_delete, adjacencies_of_tile_to_delete_ref)) = log_tiles.get(request.0)
+        {
+            let adjacencies_of_tile_to_delete = *adjacencies_of_tile_to_delete_ref;
+            for (index, adjacent_tile) in adjacencies_of_tile_to_delete
+                .0
+                .iter()
+                .enumerate()
+                .filter(|(_, option_of_adjacent)| option_of_adjacent.is_some())
+            {
+                log_tiles
+                    .get_mut(adjacent_tile.unwrap())
+                    .expect("A tile had an adjacent entity that was not a tile.")
+                    .1
+                    .0[(index + 3) % 6] = None
+            }
+            deleted_writer.write(LogTileDeleted(entity_to_delete));
+            commands.entity(entity_to_delete).despawn();
+        } else {
+            warn!(
+                "A tile deletion request was made for an entity that had no adjacent tiles and therefore was not a tile."
+            )
         }
     }
 }

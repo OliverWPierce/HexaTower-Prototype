@@ -4,7 +4,6 @@ pub struct GameParametersPlugin;
 
 impl Plugin for GameParametersPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<CreateGame>();
         app.add_observer(set_up_resources_and_kickoff_setup_sequence);
     }
 }
@@ -18,7 +17,7 @@ use bevy::ecs::schedule::ScheduleLabel;
 pub struct SetUpBoard;
 
 fn set_up_resources_and_kickoff_setup_sequence(
-    event_triggered: Trigger<CreateGame>,
+    event_triggered: On<CreateGame>,
     mut commands: Commands,
 ) {
     commands.insert_resource(event_triggered.board_size);

@@ -16,14 +16,14 @@ fn cameras(board_size: Res<BoardSize>, mut commands: Commands) {
         BoardSize::Small => 16.0,
         BoardSize::Medium => 22.0,
         BoardSize::Large => 25.0,
-        BoardSize::ExtraLarge => 50.0,
+        BoardSize::ExtraLarge => 38.0,
     };
 
     let angle = match *board_size {
         BoardSize::Small => PI / 3.0,
         BoardSize::Medium => PI / 2.9,
         BoardSize::Large => PI / 2.8,
-        BoardSize::ExtraLarge => PI / 2.7,
+        BoardSize::ExtraLarge => PI / 5.0,
     };
 
     commands.spawn((

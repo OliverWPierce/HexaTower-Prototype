@@ -1,8 +1,8 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, time::Stopwatch};
 
 use crate::backend::{
     game_parameters::SetUpBoard,
-    tiles::{LogicalTileCreated, LogicalTileLocation},
+    tiles::{DeleteTileRequest, LogTileDeleted, LogicalTileCreated, LogicalTileLocation},
 };
 
 pub struct VisTilesPlugin;
@@ -11,19 +11,29 @@ impl Plugin for VisTilesPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, create_vis_tiles_if_needed);
         app.add_systems(SetUpBoard, initialize_handles);
+
+        app.add_systems(Update, (delete_vis_tiles, scale_new_spawns));
+
+        app.add_observer(send_deletion_requests);
     }
 }
 
 #[derive(Debug, Clone, Copy, Component)]
 struct VisTileOf(Entity);
 
+#[derive(Debug, Clone, Component)]
+struct SpawnningAnimationTimeData {
+    stopwatch: Stopwatch,
+    pretend_start_time: f32,
+}
+
 fn create_vis_tiles_if_needed(
-    mut reader: EventReader<LogicalTileCreated>,
+    mut reader: MessageReader<LogicalTileCreated>,
     mut commands: Commands,
     log_tiles: Query<&LogicalTileLocation>,
     basic_hex: Res<BasicHexHandle>,
 ) {
-    for log_tile in reader.read() {
+    for (animation_time_offset, log_tile) in reader.read().enumerate() {
         let true_pos = log_tiles
             .get(log_tile.0)
             .expect("The tile had no location")
@@ -34,7 +44,44 @@ fn create_vis_tiles_if_needed(
             Transform::default().with_translation(translation),
             VisTileOf(log_tile.0),
             SceneRoot(basic_hex.0.clone()),
+            Pickable {
+                is_hoverable: true,
+                should_block_lower: true,
+            },
+            SpawnningAnimationTimeData {
+                stopwatch: Stopwatch::new(),
+                pretend_start_time: animation_time_offset as f32 / 30.0,
+            },
         ));
+    }
+}
+
+fn scale_new_spawns(
+    spawns: Query<(Entity, &mut SpawnningAnimationTimeData, &mut Transform)>,
+    mut commands: Commands,
+    time: Res<Time>,
+) {
+    const SCALE_SPEED: f32 = 2.5;
+    const OVER_SHOOT_LIMITER: f32 = std::f32::consts::PI / (2.0 * SCALE_SPEED);
+
+    for (vis_tile_ent, mut animation_timer_data, mut transform) in spawns {
+        animation_timer_data.stopwatch.tick(time.delta());
+
+        let mut mapped_time =
+            animation_timer_data.stopwatch.elapsed_secs() - animation_timer_data.pretend_start_time;
+
+        if mapped_time < 0.0 {
+            mapped_time = 0.0
+        }
+
+        if mapped_time >= OVER_SHOOT_LIMITER {
+            transform.scale = Vec3::splat(1.0);
+            commands
+                .entity(vis_tile_ent)
+                .remove::<SpawnningAnimationTimeData>();
+        } else {
+            transform.scale = Vec3::splat((mapped_time * SCALE_SPEED).sin());
+        }
     }
 }
 
@@ -45,4 +92,28 @@ fn initialize_handles(mut commands: Commands, assets: ResMut<AssetServer>) {
     commands.insert_resource(BasicHexHandle(
         assets.load(GltfAssetLabel::Scene(0).from_asset("BasicTile.glb")),
     ));
+}
+
+fn send_deletion_requests(
+    trigger: On<Pointer<Click>>,
+    vis_tiles: Query<&VisTileOf>,
+    mut writer: MessageWriter<DeleteTileRequest>,
+) {
+    if let Ok(visualizes) = vis_tiles.get(trigger.entity) {
+        writer.write(DeleteTileRequest(visualizes.0));
+    }
+}
+
+fn delete_vis_tiles(
+    mut reader: MessageReader<LogTileDeleted>,
+    mut commands: Commands,
+    vis_tiles: Query<(Entity, &VisTileOf)>,
+) {
+    for deleted_ent in reader.read() {
+        for (vis_ent, vis_of_ent) in vis_tiles {
+            if vis_of_ent.0 == deleted_ent.0 {
+                commands.entity(vis_ent).despawn();
+            }
+        }
+    }
 }
