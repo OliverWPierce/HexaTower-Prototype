@@ -9,7 +9,7 @@ impl Plugin for TilesPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<LogicalTileCreated>();
         app.add_message::<LogTileDeleted>();
-        app.add_message::<DeleteTileRequest>();
+        app.add_message::<DeleteLogTileRequest>();
         app.init_resource::<ActiveTile>();
 
         app.add_systems(SetUpBoard, (spawn_tiles, find_adjacenents).chain());
@@ -101,13 +101,13 @@ fn find_adjacenents(mut tiles: Query<(&LogicalTileLocation, &mut AdjacentTiles, 
 }
 
 #[derive(Debug, Message, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct DeleteTileRequest(pub Entity);
+pub struct DeleteLogTileRequest(pub Entity);
 
 #[derive(Debug, Message, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct LogTileDeleted(pub Entity);
 
 fn delete_tiles(
-    mut requests: MessageReader<DeleteTileRequest>,
+    mut requests: MessageReader<DeleteLogTileRequest>,
     mut log_tiles: Query<(Entity, &mut AdjacentTiles)>,
     mut commands: Commands,
     mut deleted_writer: MessageWriter<LogTileDeleted>,
