@@ -1,35 +1,20 @@
-use bevy::{prelude::*, transform::commands};
+use bevy::prelude::*;
 
 use crate::{
     backend::{
         game_parameters::SetUpBoard,
-        pieces::{BasePieceType, LogPieceSpawned, OccupiesTile, SpawnLogPiece},
+        pieces::{BasePieceType, LogPieceSpawned, OccupiesTile},
         tiles::LogicalTileLocation,
     },
-    frontend::visual_tiles::VisTileOf,
+    frontend::FrontEndUpdateSystems,
 };
 
 pub struct VisPiecesPlugin;
 
 impl Plugin for VisPiecesPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(tmp_send_spawn_request);
         app.add_systems(SetUpBoard, initialize_piece_model_handles);
-        app.add_systems(Update, spawn_peice_visuals);
-    }
-}
-
-fn tmp_send_spawn_request(
-    click: On<Pointer<Click>>,
-    mut writer: MessageWriter<SpawnLogPiece>,
-    vis_tiles: Query<&VisTileOf>,
-) {
-    if let Ok(VisTileOf(log_tile)) = vis_tiles.get(click.entity) {
-        writer.write(SpawnLogPiece {
-            piece_type: BasePieceType::Tower,
-            log_tile: *log_tile,
-        });
-        println!("request sent!")
+        app.add_systems(Update, spawn_peice_visuals.in_set(FrontEndUpdateSystems));
     }
 }
 

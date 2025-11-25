@@ -4,13 +4,24 @@ pub struct GameLogic;
 
 impl Plugin for GameLogic {
     fn build(&self, app: &mut App) {
-        app.add_plugins((TilesPlugin, GameParametersPlugin, PiecesPlugin));
+        app.add_plugins((
+            TilesPlugin,
+            GameParametersPlugin,
+            PiecesPlugin,
+            GameActionsPlugin,
+        ));
     }
 }
+
+#[derive(Debug, SystemSet, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
+pub struct BackEndUpdateSystems;
+
+pub mod game_actions;
 pub mod game_parameters;
 pub mod pieces;
 pub mod tiles;
 
+pub use game_actions::GameActionsPlugin;
 pub use game_parameters::GameParametersPlugin;
 pub use pieces::PiecesPlugin;
 pub use tiles::TilesPlugin;

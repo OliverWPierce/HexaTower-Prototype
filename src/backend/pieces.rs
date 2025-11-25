@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::backend::BackEndUpdateSystems;
+
 pub struct PiecesPlugin;
 
 impl Plugin for PiecesPlugin {
@@ -7,7 +9,7 @@ impl Plugin for PiecesPlugin {
         app.add_message::<SpawnLogPiece>();
         app.add_message::<LogPieceSpawned>();
 
-        app.add_systems(Update, spawn_logpiece);
+        app.add_systems(Update, spawn_logpiece.in_set(BackEndUpdateSystems));
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Component)]
