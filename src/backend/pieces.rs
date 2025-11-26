@@ -8,8 +8,12 @@ impl Plugin for PiecesPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<SpawnLogPiece>();
         app.add_message::<LogPieceSpawned>();
+        app.add_message::<LogPieceDespawned>();
 
-        app.add_systems(Update, spawn_logpiece.in_set(BackEndUpdateSystems));
+        app.add_systems(
+            Update,
+            (spawn_logpiece, send_despawn_notifications).in_set(BackEndUpdateSystems),
+        );
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Component)]
@@ -73,5 +77,18 @@ fn spawn_logpiece(
 
             notify_of_spawns.write(LogPieceSpawned(logpiece_ent));
         }
+    }
+}
+
+#[derive(Debug, Message)]
+pub struct LogPieceDespawned(pub Entity);
+
+fn send_despawn_notifications(
+    mut despawned_logical_pieces: RemovedComponents<OccupiesTile>,
+    mut despawns: MessageWriter<LogPieceDespawned>,
+) {
+    for logical_piece in despawned_logical_pieces.read() {
+        println!("a logical piece was despawned.");
+        despawns.write(LogPieceDespawned(logical_piece));
     }
 }
