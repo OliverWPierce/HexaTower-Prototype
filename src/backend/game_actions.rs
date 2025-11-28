@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
 
 use crate::backend::{pieces::SpawnLogPiece, tiles::DeleteLogTileRequest};
 
@@ -6,59 +6,72 @@ pub struct GameActionsPlugin;
 
 impl Plugin for GameActionsPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<CurrentGameActionPreviewed>();
-        app.add_message::<DoActionOnTile>();
+        app.init_resource::<SelectedTiles>();
+        app.init_resource::<ActionFunctionality>();
 
-        app.add_systems(Update, (tmp_swap_previewed_action, execute_action));
+        app.add_systems(
+            Update,
+            (tmp_execute_action, tmp_change_action_functionality),
+        );
+
+        app.add_systems(ExecuteSelectedAction, (send_events, clear_selected).chain());
     }
 }
 
-#[derive(Debug, Resource, Clone, Copy)]
-struct CurrentGameActionPreviewed(GameAction);
+#[derive(Debug, ScheduleLabel, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct ExecuteSelectedAction;
 
-impl Default for CurrentGameActionPreviewed {
-    fn default() -> Self {
-        Self(GameAction::SpawnTower)
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum GameAction {
-    SpawnTower,
+#[derive(Debug, Resource, Default)]
+enum ActionFunctionality {
+    // this is both used as a resource and as a simple data type
+    #[default]
     DeleteTile,
+    SpawnTower,
 }
 
-#[derive(Debug, Clone, Copy, Message)]
-pub struct DoActionOnTile(pub Entity);
+#[derive(Debug, Resource, Default)]
+pub struct SelectedTiles(pub Vec<Entity>);
 
-fn tmp_swap_previewed_action(
-    inputs: Res<ButtonInput<KeyCode>>,
-    mut current_action: ResMut<CurrentGameActionPreviewed>,
-) {
-    if inputs.just_pressed(KeyCode::ArrowLeft) {
-        current_action.0 = GameAction::DeleteTile;
-    } else if inputs.just_pressed(KeyCode::ArrowRight) {
-        current_action.0 = GameAction::SpawnTower;
+fn tmp_execute_action(inputs: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
+    if inputs.just_pressed(KeyCode::Space) {
+        commands.run_schedule(ExecuteSelectedAction);
     }
 }
 
-fn execute_action(
-    mut tiles_affected: MessageReader<DoActionOnTile>,
-    current_action: Res<CurrentGameActionPreviewed>,
-    mut deletions: MessageWriter<DeleteLogTileRequest>,
-    mut piece_spawns: MessageWriter<SpawnLogPiece>,
+fn tmp_change_action_functionality(
+    inputs: Res<ButtonInput<KeyCode>>,
+    mut functionality: ResMut<ActionFunctionality>,
 ) {
-    for DoActionOnTile(log_tile) in tiles_affected.read() {
-        match current_action.0 {
-            GameAction::SpawnTower => {
-                piece_spawns.write(SpawnLogPiece {
-                    piece_type: crate::backend::pieces::BasePieceType::Tower,
-                    log_tile: *log_tile,
-                });
-            }
-            GameAction::DeleteTile => {
+    if inputs.just_pressed(KeyCode::KeyQ) {
+        *functionality = ActionFunctionality::DeleteTile;
+    } else if inputs.just_pressed(KeyCode::KeyW) {
+        *functionality = ActionFunctionality::SpawnTower;
+    }
+}
+
+fn send_events(
+    selected: Res<SelectedTiles>,
+    functionality: Res<ActionFunctionality>,
+    mut deletions: MessageWriter<DeleteLogTileRequest>,
+    mut spawns: MessageWriter<SpawnLogPiece>,
+) {
+    match *functionality {
+        ActionFunctionality::DeleteTile => {
+            for log_tile in selected.0.iter() {
                 deletions.write(DeleteLogTileRequest(*log_tile));
             }
         }
+        ActionFunctionality::SpawnTower => {
+            for log_tile in selected.0.iter() {
+                spawns.write(SpawnLogPiece {
+                    piece_type: super::pieces::BasePieceType::Tower,
+                    log_tile: *log_tile,
+                });
+            }
+        }
     }
+}
+
+fn clear_selected(mut selected: ResMut<SelectedTiles>) {
+    selected.0.clear();
 }
