@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
+
 mod backend;
 use backend::GameLogic;
 mod frontend;
@@ -14,6 +16,8 @@ fn main() -> AppExit {
             GameLogic,
             InputAndGraphics,
             MeshPickingPlugin,
+            FrameTimeDiagnosticsPlugin::default(),
+            LogDiagnosticsPlugin::default(),
         ))
         .configure_sets(
             Update,
