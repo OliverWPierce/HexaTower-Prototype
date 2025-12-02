@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 
 use crate::{
-    backend::{game_actions::SelectedTiles, pieces::OccupiesTile},
+    backend::{
+        game_actions::{Selectable, Selected},
+        pieces::OccupiesTile,
+    },
     frontend::{visual_pieces::VisPieceOf, visual_tiles::VisTileOf},
 };
 
@@ -18,32 +21,27 @@ fn select_tiles(
     vis_tiles: Query<&VisTileOf>,
     visual_pieces: Query<&VisPieceOf>,
     logical_piece_occupies: Query<&OccupiesTile>,
-    mut selected: ResMut<SelectedTiles>,
+    selectable: Query<&Selectable>,
+    mut commands: Commands,
 ) {
-    let mut hit_tile: Option<Entity> = None;
-
     if let Ok(VisTileOf(log_tile)) = vis_tiles.get(click.entity) {
-        hit_tile = Some(*log_tile);
+        if selectable.contains(*log_tile) {
+            commands
+                .entity(*log_tile)
+                .remove::<Selectable>()
+                .insert(Selected);
+        }
     } else if let Ok(VisPieceOf(log_piece)) = visual_pieces.get(click.entity) {
         let log_tile = logical_piece_occupies
             .get(*log_piece)
             .expect("A logical piece occupied no tile.")
             .log_tile;
-        hit_tile = Some(log_tile);
-    }
-    if hit_tile.is_none() {
-    } else {
-        // add a check for the number of tiles already selected.
 
-        for tile in selected.0.iter() {
-            if *tile == hit_tile.unwrap() {
-                warn!(
-                    "The player selected the same tile twice. Code prevented it from being added to the list twice"
-                );
-                return;
-            }
+        if selectable.contains(log_tile) {
+            commands
+                .entity(log_tile)
+                .remove::<Selectable>()
+                .insert(Selected);
         }
-
-        selected.0.push(hit_tile.unwrap());
     }
 }
