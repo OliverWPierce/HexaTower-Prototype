@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
 
 use crate::backend::{
@@ -139,13 +141,15 @@ fn mark_selectable(
     tiles: Query<(Entity, Has<OccupiedByPiece>), With<LogicalTileLocation>>,
     mut commands: Commands,
     selection_critera: Res<CurrentCriteraForSelectability>,
-    selected: Query<&Selected>,
+    selected: Query<(), With<Selected>>,
 ) {
-    if selection_critera.is_some_and(|crit| crit.max_tiles_selected > selected.count()) {
-        match selection_critera.unwrap().method {
+    if let Some(selection_critera) = selection_critera.0 {
+        let is_max_selected = selected.count() >= selection_critera.max_tiles_selected;
+
+        match selection_critera.method {
             MethodForDeterminingSelectability::AllTiles => {
                 for (log_tile, _) in tiles {
-                    if !selected.contains(log_tile) {
+                    if !is_max_selected && !selected.contains(log_tile) {
                         commands.entity(log_tile).try_insert(Selectable);
                     } else {
                         commands.entity(log_tile).try_remove::<Selectable>();
@@ -154,7 +158,7 @@ fn mark_selectable(
             }
             MethodForDeterminingSelectability::AllPieces => {
                 for (log_tile, is_occupied) in tiles {
-                    if !selected.contains(log_tile) && is_occupied {
+                    if !is_max_selected && !selected.contains(log_tile) && is_occupied {
                         commands.entity(log_tile).try_insert(Selectable);
                     } else {
                         commands.entity(log_tile).try_remove::<Selectable>();
@@ -163,7 +167,7 @@ fn mark_selectable(
             }
             MethodForDeterminingSelectability::UnoccupiedTiles => {
                 for (log_tile, is_occupied) in tiles {
-                    if !selected.contains(log_tile) && !is_occupied {
+                    if !is_max_selected && !selected.contains(log_tile) && !is_occupied {
                         commands.entity(log_tile).try_insert(Selectable);
                     } else {
                         commands.entity(log_tile).try_remove::<Selectable>();
