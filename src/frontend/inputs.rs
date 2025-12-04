@@ -1,10 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    backend::{
-        game_actions::{Selectable, Selected},
-        pieces::OccupiesTile,
-    },
+    backend::{game_actions::EligibileTile, pieces::OccupiesTile},
     frontend::{visual_pieces::VisPieceOf, visual_tiles::VisTileOf},
 };
 
@@ -21,15 +18,11 @@ fn select_tiles(
     vis_tiles: Query<&VisTileOf>,
     visual_pieces: Query<&VisPieceOf>,
     logical_piece_occupies: Query<&OccupiesTile>,
-    selectable: Query<&Selectable>,
-    mut commands: Commands,
+    mut elligible: Query<&mut EligibileTile>,
 ) {
     if let Ok(VisTileOf(log_tile)) = vis_tiles.get(click.entity) {
-        if selectable.contains(*log_tile) {
-            commands
-                .entity(*log_tile)
-                .remove::<Selectable>()
-                .insert(Selected);
+        if let Ok(mut selection_status) = elligible.get_mut(*log_tile) {
+            selection_status.selected = true
         }
     } else if let Ok(VisPieceOf(log_piece)) = visual_pieces.get(click.entity) {
         let log_tile = logical_piece_occupies
@@ -37,11 +30,8 @@ fn select_tiles(
             .expect("A logical piece occupied no tile.")
             .log_tile;
 
-        if selectable.contains(log_tile) {
-            commands
-                .entity(log_tile)
-                .remove::<Selectable>()
-                .insert(Selected);
+        if let Ok(mut selection_status) = elligible.get_mut(log_tile) {
+            selection_status.selected = true
         }
     }
 }

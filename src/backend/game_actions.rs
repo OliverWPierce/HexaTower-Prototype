@@ -1,11 +1,9 @@
-use std::ops::Deref;
-
 use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
 
 use crate::backend::{
     BackEndUpdateSystems,
     pieces::{OccupiedByPiece, SpawnLogPiece},
-    tiles::{DeleteLogTileRequest, LogicalTileLocation},
+    tiles::{AdjacentTiles, DeleteLogTileRequest},
 };
 
 pub struct GameActionsPlugin;
@@ -13,16 +11,31 @@ pub struct GameActionsPlugin;
 impl Plugin for GameActionsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CurrentActionFunctionality>();
-        app.init_resource::<CurrentCriteraForSelectability>();
+        app.init_resource::<CurrentEligibilityCritera>();
 
         app.add_observer(load_action_data_into_resources);
 
         app.add_systems(
             Update,
-            (tmp_execute_action, tmp_load_actions, mark_selectable).in_set(BackEndUpdateSystems),
+            (tmp_execute_action, tmp_load_actions).in_set(BackEndUpdateSystems),
         );
 
-        app.add_systems(ExecuteSelectedAction, (send_events, clear_selected).chain());
+        app.add_systems(ExecuteSelectedAction, send_events);
+        app.add_systems(
+            ExecuteSelectedAction,
+            (clear_action_instructions, clear_eligibility_markers).after(send_events),
+        );
+
+        app.add_systems(
+            Update,
+            (
+                clear_eligibility_markers,
+                mark_tiles_that_are_eligible_under_method_conditions,
+            )
+                .chain()
+                .in_set(BackEndUpdateSystems)
+                .run_if(resource_changed::<CurrentEligibilityCritera>),
+        );
     }
 }
 
@@ -38,27 +51,26 @@ enum ActionFunctionality {
     SpawnTower,
 }
 
+#[derive(Debug, Component)]
+pub struct EligibileTile {
+    pub selected: bool,
+}
+
 #[derive(Debug, Clone, Copy)]
-pub enum MethodForDeterminingSelectability {
+pub enum MethodForDeterminingEligibility {
     AllTiles,
     AllPieces,
     UnoccupiedTiles,
 }
 
 #[derive(Debug, Clone, Copy)]
-struct CriteraForTileToBeSelectable {
-    method: MethodForDeterminingSelectability,
-    max_tiles_selected: usize,
+struct TileEligibilityCritera {
+    method: MethodForDeterminingEligibility,
+    maximum_amount_of_selected_tiles_allowed: usize,
 }
 
 #[derive(Debug, Clone, Copy, Resource, Deref, Default)]
-struct CurrentCriteraForSelectability(Option<CriteraForTileToBeSelectable>);
-
-#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Component)]
-pub struct Selectable;
-
-#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Component)]
-pub struct Selected;
+struct CurrentEligibilityCritera(Option<TileEligibilityCritera>);
 
 fn tmp_execute_action(inputs: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
     if inputs.just_pressed(KeyCode::Space) {
@@ -70,53 +82,55 @@ fn tmp_load_actions(inputs: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
     if inputs.just_pressed(KeyCode::KeyA) {
         commands.trigger(LoadAction(ActionData {
             functionality: ActionFunctionality::DeleteTile,
-            valid_selections: CriteraForTileToBeSelectable {
-                method: MethodForDeterminingSelectability::UnoccupiedTiles,
-                max_tiles_selected: 3,
+            valid_selections: TileEligibilityCritera {
+                method: MethodForDeterminingEligibility::UnoccupiedTiles,
+                maximum_amount_of_selected_tiles_allowed: 3,
             },
         }));
     } else if inputs.just_pressed(KeyCode::KeyS) {
         commands.trigger(LoadAction(ActionData {
             functionality: ActionFunctionality::SpawnTower,
-            valid_selections: CriteraForTileToBeSelectable {
-                method: MethodForDeterminingSelectability::UnoccupiedTiles,
-                max_tiles_selected: 1,
+            valid_selections: TileEligibilityCritera {
+                method: MethodForDeterminingEligibility::UnoccupiedTiles,
+                maximum_amount_of_selected_tiles_allowed: 1,
             },
         }));
     } else if inputs.just_pressed(KeyCode::KeyD) {
         commands.trigger(LoadAction(ActionData {
             functionality: ActionFunctionality::DeleteTile,
-            valid_selections: CriteraForTileToBeSelectable {
-                method: MethodForDeterminingSelectability::AllPieces,
-                max_tiles_selected: 2,
+            valid_selections: TileEligibilityCritera {
+                method: MethodForDeterminingEligibility::AllPieces,
+                maximum_amount_of_selected_tiles_allowed: 2,
             },
         }));
     } else if inputs.just_pressed(KeyCode::KeyF) {
         commands.trigger(LoadAction(ActionData {
             functionality: ActionFunctionality::DeleteTile,
-            valid_selections: CriteraForTileToBeSelectable {
-                method: MethodForDeterminingSelectability::AllTiles,
-                max_tiles_selected: 5,
+            valid_selections: TileEligibilityCritera {
+                method: MethodForDeterminingEligibility::AllTiles,
+                maximum_amount_of_selected_tiles_allowed: 5,
             },
         }));
     }
 }
 
 fn send_events(
-    selected: Query<Entity, With<Selected>>,
+    tiles: Query<(Entity, &EligibileTile)>,
     functionality: Res<CurrentActionFunctionality>,
     mut deletions: MessageWriter<DeleteLogTileRequest>,
     mut spawns: MessageWriter<SpawnLogPiece>,
 ) {
+    let selected = tiles.iter().filter(|(_, status)| status.selected);
+
     if let Some(functionality) = functionality.0 {
         match functionality {
             ActionFunctionality::DeleteTile => {
-                for log_tile in selected.iter() {
+                for (log_tile, _) in selected {
                     deletions.write(DeleteLogTileRequest(log_tile));
                 }
             }
             ActionFunctionality::SpawnTower => {
-                for log_tile in selected.iter() {
+                for (log_tile, _) in selected {
                     spawns.write(SpawnLogPiece {
                         piece_type: super::pieces::BasePieceType::Tower,
                         log_tile,
@@ -131,46 +145,67 @@ fn send_events(
     }
 }
 
-fn clear_selected(selected: Query<Entity, With<Selected>>, mut commands: Commands) {
-    for log_tile in selected {
-        commands.entity(log_tile).remove::<Selected>();
+fn clear_action_instructions(
+    mut functionality: ResMut<CurrentActionFunctionality>,
+    mut critera: ResMut<CurrentEligibilityCritera>,
+) {
+    functionality.0 = None;
+    critera.0 = None
+}
+
+fn clear_eligibility_markers(
+    mut commands: Commands,
+    eligible_tiles: Query<Entity, With<EligibileTile>>,
+) {
+    for tile in eligible_tiles {
+        commands.entity(tile).remove::<EligibileTile>();
     }
 }
 
-fn mark_selectable(
-    tiles: Query<(Entity, Has<OccupiedByPiece>), With<LogicalTileLocation>>,
+fn mark_tiles_that_are_eligible_under_method_conditions(
+    log_tiles: Query<(Entity, Has<OccupiedByPiece>, Has<EligibileTile>), With<AdjacentTiles>>,
+    critera: Res<CurrentEligibilityCritera>,
     mut commands: Commands,
-    selection_critera: Res<CurrentCriteraForSelectability>,
-    selected: Query<(), With<Selected>>,
 ) {
-    if let Some(selection_critera) = selection_critera.0 {
-        let is_max_selected = selected.count() >= selection_critera.max_tiles_selected;
+    if let Some(TileEligibilityCritera {
+        method,
+        maximum_amount_of_selected_tiles_allowed: _,
+    }) = critera.0
+    {
+        match method {
+            MethodForDeterminingEligibility::AllTiles => {
+                for (tile, _, is_already_eligible) in log_tiles {
+                    // this is an execption to the pattern laid out in the other match arms
+                    if !is_already_eligible {
+                        commands
+                            .entity(tile)
+                            .insert(EligibileTile { selected: false });
+                    }
+                }
+            }
+            MethodForDeterminingEligibility::AllPieces => {
+                for (tile, is_occupied, is_already_eligible) in log_tiles {
+                    let eligible = is_occupied; // put the condition logic here.
 
-        match selection_critera.method {
-            MethodForDeterminingSelectability::AllTiles => {
-                for (log_tile, _) in tiles {
-                    if !is_max_selected && !selected.contains(log_tile) {
-                        commands.entity(log_tile).try_insert(Selectable);
-                    } else {
-                        commands.entity(log_tile).try_remove::<Selectable>();
+                    if !eligible {
+                        commands.entity(tile).try_remove::<EligibileTile>();
+                    } else if !is_already_eligible {
+                        commands
+                            .entity(tile)
+                            .insert(EligibileTile { selected: false });
                     }
                 }
             }
-            MethodForDeterminingSelectability::AllPieces => {
-                for (log_tile, is_occupied) in tiles {
-                    if !is_max_selected && !selected.contains(log_tile) && is_occupied {
-                        commands.entity(log_tile).try_insert(Selectable);
-                    } else {
-                        commands.entity(log_tile).try_remove::<Selectable>();
-                    }
-                }
-            }
-            MethodForDeterminingSelectability::UnoccupiedTiles => {
-                for (log_tile, is_occupied) in tiles {
-                    if !is_max_selected && !selected.contains(log_tile) && !is_occupied {
-                        commands.entity(log_tile).try_insert(Selectable);
-                    } else {
-                        commands.entity(log_tile).try_remove::<Selectable>();
+            MethodForDeterminingEligibility::UnoccupiedTiles => {
+                for (tile, is_occupied, is_already_eligible) in log_tiles {
+                    let eligible = !is_occupied;
+
+                    if !eligible {
+                        commands.entity(tile).try_remove::<EligibileTile>();
+                    } else if !is_already_eligible {
+                        commands
+                            .entity(tile)
+                            .insert(EligibileTile { selected: false });
                     }
                 }
             }
@@ -181,7 +216,7 @@ fn mark_selectable(
 #[derive(Debug, Component, Clone, Copy)]
 struct ActionData {
     functionality: ActionFunctionality,
-    valid_selections: CriteraForTileToBeSelectable,
+    valid_selections: TileEligibilityCritera,
 }
 
 #[derive(Debug, Event, Clone, Copy)]
@@ -190,9 +225,9 @@ struct LoadAction(ActionData);
 fn load_action_data_into_resources(
     action_data: On<LoadAction>,
     mut functionality: ResMut<CurrentActionFunctionality>,
-    mut selection_critera: ResMut<CurrentCriteraForSelectability>,
+    mut selection_critera: ResMut<CurrentEligibilityCritera>,
 ) {
     functionality.0 = Some(action_data.0.functionality);
     selection_critera.0 = Some(action_data.0.valid_selections);
-    println!("changing the loaded action")
+    println!("changing the loaded action");
 }

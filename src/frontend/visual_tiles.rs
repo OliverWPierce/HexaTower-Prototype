@@ -1,8 +1,11 @@
 use bevy::{prelude::*, time::Stopwatch};
 
-use crate::backend::{
-    game_parameters::SetUpBoard,
-    tiles::{DeleteTileRequest, LogTileDeleted, LogicalTileCreated, LogicalTileLocation},
+use crate::{
+    backend::{
+        game_parameters::SetUpBoard,
+        tiles::{LogTileDeleted, LogicalTileCreated, LogicalTileLocation},
+    },
+    frontend::FrontEndUpdateSystems,
 };
 
 pub struct VisTilesPlugin;
@@ -12,14 +15,15 @@ impl Plugin for VisTilesPlugin {
         app.add_systems(Update, create_vis_tiles_if_needed);
         app.add_systems(SetUpBoard, initialize_handles);
 
-        app.add_systems(Update, (delete_vis_tiles, scale_new_spawns));
-
-        app.add_observer(send_deletion_requests);
+        app.add_systems(
+            Update,
+            (delete_vis_tiles, scale_new_spawns).in_set(FrontEndUpdateSystems),
+        );
     }
 }
 
 #[derive(Debug, Clone, Copy, Component)]
-struct VisTileOf(Entity);
+pub struct VisTileOf(pub Entity);
 
 #[derive(Debug, Clone, Component)]
 struct SpawnningAnimationTimeData {
@@ -61,8 +65,9 @@ fn scale_new_spawns(
     mut commands: Commands,
     time: Res<Time>,
 ) {
-    const SCALE_SPEED: f32 = 2.5;
-    const OVER_SHOOT_LIMITER: f32 = std::f32::consts::PI / (2.0 * SCALE_SPEED);
+    const SCALE_SPEED: f32 = 3.0;
+    const SCALE_MULTIPLIER: f32 = 1.2; // must be greater than 1
+    let time_finished: f32 = (std::f32::consts::PI - (1.0 / SCALE_MULTIPLIER).asin()) / SCALE_SPEED;
 
     for (vis_tile_ent, mut animation_timer_data, mut transform) in spawns {
         animation_timer_data.stopwatch.tick(time.delta());
@@ -74,13 +79,13 @@ fn scale_new_spawns(
             mapped_time = 0.0
         }
 
-        if mapped_time >= OVER_SHOOT_LIMITER {
+        if mapped_time >= time_finished {
             transform.scale = Vec3::splat(1.0);
             commands
                 .entity(vis_tile_ent)
                 .remove::<SpawnningAnimationTimeData>();
         } else {
-            transform.scale = Vec3::splat((mapped_time * SCALE_SPEED).sin());
+            transform.scale = Vec3::splat(SCALE_MULTIPLIER * (mapped_time * SCALE_SPEED).sin());
         }
     }
 }
@@ -92,16 +97,6 @@ fn initialize_handles(mut commands: Commands, assets: ResMut<AssetServer>) {
     commands.insert_resource(BasicHexHandle(
         assets.load(GltfAssetLabel::Scene(0).from_asset("BasicTile.glb")),
     ));
-}
-
-fn send_deletion_requests(
-    trigger: On<Pointer<Click>>,
-    vis_tiles: Query<&VisTileOf>,
-    mut writer: MessageWriter<DeleteTileRequest>,
-) {
-    if let Ok(visualizes) = vis_tiles.get(trigger.entity) {
-        writer.write(DeleteTileRequest(visualizes.0));
-    }
 }
 
 fn delete_vis_tiles(
