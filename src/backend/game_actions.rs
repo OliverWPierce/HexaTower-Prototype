@@ -14,6 +14,7 @@ impl Plugin for GameActionsPlugin {
         app.init_resource::<CurrentEligibilityCritera>();
 
         app.add_observer(load_action_data_into_resources);
+        app.add_observer(try_select_tile);
 
         app.add_systems(
             Update,
@@ -230,4 +231,20 @@ fn load_action_data_into_resources(
     functionality.0 = Some(action_data.0.functionality);
     selection_critera.0 = Some(action_data.0.valid_selections);
     println!("changing the loaded action");
+}
+
+#[derive(Debug, Event)]
+pub struct SelectionRequest(pub Entity);
+
+fn try_select_tile(
+    tile_attempted_to_select: On<SelectionRequest>,
+    mut eligible_tiles: Query<&mut EligibileTile>,
+) {
+    if let Ok(mut status) = eligible_tiles.get_mut(tile_attempted_to_select.0)
+        && !status.selected
+    {
+        status.selected = true
+    } else {
+        println!("Attempted to select a tile, but it was either already selected or inelligible.")
+    }
 }
