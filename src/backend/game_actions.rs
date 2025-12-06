@@ -29,10 +29,7 @@ impl Plugin for GameActionsPlugin {
 
         app.add_systems(
             Update,
-            (
-                clear_eligibility_markers,
-                mark_tiles_that_are_eligible_under_method_conditions,
-            )
+            (mark_tiles_that_are_eligible_under_method_conditions,)
                 .chain()
                 .in_set(BackEndUpdateSystems)
                 .run_if(resource_changed::<CurrentEligibilityCritera>),
