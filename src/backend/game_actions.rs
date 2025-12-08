@@ -29,7 +29,10 @@ impl Plugin for GameActionsPlugin {
 
         app.add_systems(
             Update,
-            (mark_tiles_that_are_eligible_under_method_conditions,)
+            (
+                clear_eligibility_markers,
+                mark_tiles_that_are_eligible_under_method_conditions,
+            )
                 .chain()
                 .in_set(BackEndUpdateSystems)
                 .run_if(resource_changed::<CurrentEligibilityCritera>),
@@ -103,10 +106,10 @@ fn tmp_load_actions(inputs: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
         }));
     } else if inputs.just_pressed(KeyCode::KeyF) {
         commands.trigger(LoadAction(ActionData {
-            functionality: ActionFunctionality::DeleteTile,
+            functionality: ActionFunctionality::SpawnTower,
             valid_selections: TileEligibilityCritera {
-                method: MethodForDeterminingEligibility::AllTiles,
-                maximum_amount_of_selected_tiles_allowed: 5,
+                method: MethodForDeterminingEligibility::UnoccupiedTiles,
+                maximum_amount_of_selected_tiles_allowed: 10,
             },
         }));
     }
@@ -237,11 +240,9 @@ fn try_select_tile(
     tile_attempted_to_select: On<SelectionRequest>,
     mut eligible_tiles: Query<&mut EligibileTile>,
 ) {
-    if let Ok(mut status) = eligible_tiles.get_mut(tile_attempted_to_select.0)
-        && !status.selected
-    {
-        status.selected = true
+    if let Ok(mut status) = eligible_tiles.get_mut(tile_attempted_to_select.0) {
+        status.selected = !status.selected;
     } else {
-        println!("Attempted to select a tile, but it was either already selected or inelligible.")
+        println!("Attempted to select a tile, but it was inelligible.")
     }
 }
