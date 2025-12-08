@@ -10,7 +10,6 @@ impl Plugin for InputAndGraphics {
             VisTilesPlugin,
             VisPiecesPlugin,
             InputsPlugin,
-            TileSelectionIndicationPlugin,
         ));
     }
 }

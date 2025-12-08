@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     backend::{
-        game_actions::{EligibileTile, SelectionRequest},
+        game_actions::{IsEligible, SelectionRequest},
         pieces::OccupiesTile,
     },
     frontend::{visual_pieces::VisPieceOf, visual_tiles::VisTileOf},

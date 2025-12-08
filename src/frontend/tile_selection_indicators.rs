@@ -1,11 +1,12 @@
 use std::f32::consts::PI;
 
 use bevy::{prelude::*, time::Stopwatch};
-use rand::seq::IndexedRandom;
 
 use crate::{
     backend::{
-        game_actions::EligibileTile, game_parameters::SetUpBoard, tiles::LogicalTileLocation,
+        game_actions::{EvaluateEligibility, ExecuteSelectedAction, IsEligible},
+        game_parameters::SetUpBoard,
+        tiles::LogicalTileLocation,
     },
     frontend::FrontEndUpdateSystems,
 };
@@ -16,15 +17,15 @@ impl Plugin for TileSelectionIndicationPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(SetUpBoard, initialize_indicator_model_handles);
 
+        app.add_systems(Update, (update_animations,).in_set(FrontEndUpdateSystems));
+
         app.add_systems(
-            Update,
-            (
-                modify_or_create_indicators_of_new_or_changed_tiles,
-                start_deletion_animations,
-                update_animations,
-            )
-                .chain()
-                .in_set(FrontEndUpdateSystems),
+            EvaluateEligibility,
+            update_indicator_states.in_set(FrontEndUpdateSystems),
+        );
+        app.add_systems(
+            ExecuteSelectedAction,
+            update_indicator_states.in_set(FrontEndUpdateSystems),
         );
     }
 }
@@ -43,75 +44,101 @@ fn initialize_indicator_model_handles(mut commands: Commands, assets: ResMut<Ass
 }
 
 #[derive(Debug, Clone, Copy, Component)]
-struct IndicatorWatches(Entity);
+struct IndicatorInfo {
+    tile_watched: Entity,
+    visually_selected: bool,
+}
 
 #[derive(Debug, Clone, Copy, Component)]
 enum ScaleMode {
     In,
     Out,
-    Pop(bool),
+    Pop {
+        already_swapped_model: bool,
+        to_selected: bool,
+    },
 }
 
 #[derive(Component, Clone)]
 struct AnimationInstructions {
     t: Stopwatch,
     mode: ScaleMode,
-    to_selected: bool,
     offset: i32,
 }
 
-fn modify_or_create_indicators_of_new_or_changed_tiles(
-    eligible_tiles_that_changed: Query<
-        (Entity, &EligibileTile, &LogicalTileLocation),
-        Changed<EligibileTile>,
-    >,
-    indicators: Query<(&IndicatorWatches, Entity)>,
-    mut commands: Commands,
+fn update_indicator_states(
+    eligible_tiles: Query<(Entity, &IsEligible, &LogicalTileLocation)>,
+    existing_indicators: Query<(Entity, &IndicatorInfo)>,
     models: Res<IndicatorHandles>,
+    mut commands: Commands,
 ) {
-    let offset_options = [1, 2, 3, 4, 5, 6];
-    let mut rng = rand::rng();
+    for (
+        indicator,
+        IndicatorInfo {
+            tile_watched,
+            visually_selected,
+        },
+    ) in existing_indicators
+    {
+        if let Ok((_, IsEligible { selected }, _)) = eligible_tiles.get(*tile_watched)
+            && selected != visually_selected
+        {
+            commands.entity(indicator).insert(AnimationInstructions {
+                t: Stopwatch::new(),
+                mode: ScaleMode::Pop {
+                    already_swapped_model: false,
+                    to_selected: *selected,
+                },
+                offset: 0,
+            });
+        } else {
+            commands.entity(indicator).insert(AnimationInstructions {
+                t: Stopwatch::new(),
+                mode: ScaleMode::Out,
+                offset: 0,
+            });
+        }
+    }
 
-    for (tile, EligibileTile { selected }, location) in eligible_tiles_that_changed {
-        let mut current_indicator = None;
+    for (tile, eligibility, location) in eligible_tiles {
+        let mut has_indicator: bool = false;
 
-        for (tile_watched, indicator) in indicators.iter() {
-            if tile_watched.0 == tile {
-                current_indicator = Some(indicator);
+        for (
+            _,
+            IndicatorInfo {
+                tile_watched,
+                visually_selected: _,
+            },
+        ) in existing_indicators
+        {
+            if tile == *tile_watched {
+                has_indicator = true;
                 break;
             }
         }
 
-        if let Some(indicator) = current_indicator {
-            commands.entity(indicator).insert(AnimationInstructions {
-                t: Stopwatch::new(),
-                mode: ScaleMode::Pop(false),
-                to_selected: *selected,
-                offset: 0,
-            });
-        } else {
+        if !has_indicator {
             commands.spawn((
-                IndicatorWatches(tile),
+                IndicatorInfo {
+                    tile_watched: tile,
+                    visually_selected: eligibility.selected,
+                },
+                AnimationInstructions {
+                    t: Stopwatch::new(),
+                    mode: ScaleMode::In,
+                    offset: 0,
+                },
                 Transform::default()
                     .with_translation(Vec3 {
                         x: location.read().x,
                         y: 0.0,
                         z: location.read().y,
                     })
-                    .with_scale(Vec3::ZERO)
-                    .with_rotation(Quat::from_rotation_y(
-                        (*offset_options.choose(&mut rng).unwrap() - 3) as f32 / 30.0,
-                    )),
-                SceneRoot(match selected {
+                    .with_scale(Vec3::ZERO),
+                SceneRoot(match eligibility.selected {
                     true => models.selected.clone(),
                     false => models.unselected.clone(),
                 }),
-                AnimationInstructions {
-                    t: Stopwatch::new(),
-                    mode: ScaleMode::In,
-                    to_selected: *selected,
-                    offset: *offset_options.choose(&mut rng).unwrap(),
-                },
             ));
         }
     }
@@ -167,7 +194,10 @@ fn update_animations(
                     transform.scale = Vec3::splat(-SPEED * time_squared + 1.0);
                 }
             }
-            ScaleMode::Pop(already_swapped) => {
+            ScaleMode::Pop {
+                already_swapped_model,
+                to_selected,
+            } => {
                 const SPEED: f32 = 20.0;
                 const MAX_SIZE_BOOST: f32 = 0.15;
                 let mut mapped_time =
@@ -179,14 +209,12 @@ fn update_animations(
                 let time_finished = 2.0 * PI / SPEED;
                 let swap_time = PI / (SPEED * 2.0);
 
-                if mapped_time >= swap_time && !*already_swapped {
-                    *already_swapped = true;
-                    commands
-                        .entity(indicator)
-                        .insert(match instructions.to_selected {
-                            true => SceneRoot(models.selected.clone()),
-                            false => SceneRoot(models.unselected.clone()),
-                        });
+                if mapped_time >= swap_time && !*already_swapped_model {
+                    *already_swapped_model = true;
+                    commands.entity(indicator).insert(match to_selected {
+                        true => SceneRoot(models.selected.clone()),
+                        false => SceneRoot(models.unselected.clone()),
+                    });
                     println!("swaped models");
                 }
 
@@ -200,31 +228,6 @@ fn update_animations(
                         -MAX_SIZE_BOOST * (mapped_time * SPEED).cos() + MAX_SIZE_BOOST + 1.0,
                     );
                 }
-            }
-        }
-    }
-}
-
-fn start_deletion_animations(
-    mut no_longer_eligible_tiles: RemovedComponents<EligibileTile>,
-    indicators: Query<(&IndicatorWatches, Entity)>,
-    mut commands: Commands,
-) {
-    let offset_options = [1, 2, 3, 4, 5, 6];
-    let mut rng = rand::rng();
-
-    for tile in no_longer_eligible_tiles.read() {
-        for (tile_watched, indicator) in indicators.iter() {
-            if tile_watched.0 == tile {
-                commands
-                    .entity(indicator)
-                    .try_insert(AnimationInstructions {
-                        t: Stopwatch::new(),
-                        mode: ScaleMode::Out,
-                        to_selected: false,
-                        offset: *offset_options.choose(&mut rng).unwrap(),
-                    });
-                break;
             }
         }
     }

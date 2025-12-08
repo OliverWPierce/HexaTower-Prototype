@@ -3,7 +3,7 @@ use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
 use crate::backend::{
     BackEndUpdateSystems,
     pieces::{OccupiedByPiece, SpawnLogPiece},
-    tiles::{AdjacentTiles, DeleteLogTileRequest},
+    tiles::{DeleteLogTileRequest, LogicalTileLocation},
 };
 
 pub struct GameActionsPlugin;
@@ -14,7 +14,7 @@ impl Plugin for GameActionsPlugin {
         app.init_resource::<CurrentEligibilityCritera>();
 
         app.add_observer(load_action_data_into_resources);
-        app.add_observer(try_select_tile);
+        app.add_observer(handle_selection_requests);
 
         app.add_systems(
             Update,
@@ -24,24 +24,19 @@ impl Plugin for GameActionsPlugin {
         app.add_systems(ExecuteSelectedAction, send_events);
         app.add_systems(
             ExecuteSelectedAction,
-            (clear_action_instructions, clear_eligibility_markers).after(send_events),
+            (clear_action_instructions, clear_eligible)
+                .after(send_events)
+                .in_set(BackEndUpdateSystems),
         );
-
         app.add_systems(
-            Update,
-            (
-                clear_eligibility_markers,
-                mark_tiles_that_are_eligible_under_method_conditions,
-            )
-                .chain()
-                .in_set(BackEndUpdateSystems)
-                .run_if(resource_changed::<CurrentEligibilityCritera>),
+            EvaluateEligibility,
+            determine_eligibility.in_set(BackEndUpdateSystems),
         );
     }
 }
 
 #[derive(Debug, ScheduleLabel, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct ExecuteSelectedAction;
+pub struct ExecuteSelectedAction;
 
 #[derive(Debug, Resource, Default, Clone, Copy, Deref)]
 struct CurrentActionFunctionality(pub Option<ActionFunctionality>);
@@ -53,7 +48,7 @@ enum ActionFunctionality {
 }
 
 #[derive(Debug, Component)]
-pub struct EligibileTile {
+pub struct IsEligible {
     pub selected: bool,
 }
 
@@ -84,10 +79,11 @@ fn tmp_load_actions(inputs: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
         commands.trigger(LoadAction(ActionData {
             functionality: ActionFunctionality::DeleteTile,
             valid_selections: TileEligibilityCritera {
-                method: MethodForDeterminingEligibility::UnoccupiedTiles,
+                method: MethodForDeterminingEligibility::AllTiles,
                 maximum_amount_of_selected_tiles_allowed: 3,
             },
         }));
+        commands.run_schedule(EvaluateEligibility);
     } else if inputs.just_pressed(KeyCode::KeyS) {
         commands.trigger(LoadAction(ActionData {
             functionality: ActionFunctionality::SpawnTower,
@@ -96,6 +92,7 @@ fn tmp_load_actions(inputs: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
                 maximum_amount_of_selected_tiles_allowed: 1,
             },
         }));
+        commands.run_schedule(EvaluateEligibility);
     } else if inputs.just_pressed(KeyCode::KeyD) {
         commands.trigger(LoadAction(ActionData {
             functionality: ActionFunctionality::DeleteTile,
@@ -104,6 +101,7 @@ fn tmp_load_actions(inputs: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
                 maximum_amount_of_selected_tiles_allowed: 2,
             },
         }));
+        commands.run_schedule(EvaluateEligibility);
     } else if inputs.just_pressed(KeyCode::KeyF) {
         commands.trigger(LoadAction(ActionData {
             functionality: ActionFunctionality::SpawnTower,
@@ -112,11 +110,12 @@ fn tmp_load_actions(inputs: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
                 maximum_amount_of_selected_tiles_allowed: 10,
             },
         }));
+        commands.run_schedule(EvaluateEligibility);
     }
 }
 
 fn send_events(
-    tiles: Query<(Entity, &EligibileTile)>,
+    tiles: Query<(Entity, &IsEligible)>,
     functionality: Res<CurrentActionFunctionality>,
     mut deletions: MessageWriter<DeleteLogTileRequest>,
     mut spawns: MessageWriter<SpawnLogPiece>,
@@ -154,66 +153,6 @@ fn clear_action_instructions(
     critera.0 = None
 }
 
-fn clear_eligibility_markers(
-    mut commands: Commands,
-    eligible_tiles: Query<Entity, With<EligibileTile>>,
-) {
-    for tile in eligible_tiles {
-        commands.entity(tile).remove::<EligibileTile>();
-    }
-}
-
-fn mark_tiles_that_are_eligible_under_method_conditions(
-    log_tiles: Query<(Entity, Has<OccupiedByPiece>, Has<EligibileTile>), With<AdjacentTiles>>,
-    critera: Res<CurrentEligibilityCritera>,
-    mut commands: Commands,
-) {
-    if let Some(TileEligibilityCritera {
-        method,
-        maximum_amount_of_selected_tiles_allowed: _,
-    }) = critera.0
-    {
-        match method {
-            MethodForDeterminingEligibility::AllTiles => {
-                for (tile, _, is_already_eligible) in log_tiles {
-                    // this is an execption to the pattern laid out in the other match arms
-                    if !is_already_eligible {
-                        commands
-                            .entity(tile)
-                            .insert(EligibileTile { selected: false });
-                    }
-                }
-            }
-            MethodForDeterminingEligibility::AllPieces => {
-                for (tile, is_occupied, is_already_eligible) in log_tiles {
-                    let eligible = is_occupied; // put the condition logic here.
-
-                    if !eligible {
-                        commands.entity(tile).try_remove::<EligibileTile>();
-                    } else if !is_already_eligible {
-                        commands
-                            .entity(tile)
-                            .insert(EligibileTile { selected: false });
-                    }
-                }
-            }
-            MethodForDeterminingEligibility::UnoccupiedTiles => {
-                for (tile, is_occupied, is_already_eligible) in log_tiles {
-                    let eligible = !is_occupied;
-
-                    if !eligible {
-                        commands.entity(tile).try_remove::<EligibileTile>();
-                    } else if !is_already_eligible {
-                        commands
-                            .entity(tile)
-                            .insert(EligibileTile { selected: false });
-                    }
-                }
-            }
-        }
-    }
-}
-
 #[derive(Debug, Component, Clone, Copy)]
 struct ActionData {
     functionality: ActionFunctionality,
@@ -227,22 +166,98 @@ fn load_action_data_into_resources(
     action_data: On<LoadAction>,
     mut functionality: ResMut<CurrentActionFunctionality>,
     mut selection_critera: ResMut<CurrentEligibilityCritera>,
+    mut commands: Commands,
 ) {
     functionality.0 = Some(action_data.0.functionality);
     selection_critera.0 = Some(action_data.0.valid_selections);
     println!("changing the loaded action");
+    commands.run_schedule(EvaluateEligibility);
 }
 
 #[derive(Debug, Event)]
 pub struct SelectionRequest(pub Entity);
 
-fn try_select_tile(
-    tile_attempted_to_select: On<SelectionRequest>,
-    mut eligible_tiles: Query<&mut EligibileTile>,
+#[derive(Debug, ScheduleLabel, Hash, PartialEq, Eq, Clone, Copy)]
+pub struct EvaluateEligibility;
+
+fn determine_eligibility(
+    tiles: Query<(Entity, Has<OccupiedByPiece>, Has<IsEligible>), With<LogicalTileLocation>>,
+    previously_eligibe: Query<(Entity, &IsEligible)>,
+    critera: Res<CurrentEligibilityCritera>,
+    mut commands: Commands,
 ) {
-    if let Ok(mut status) = eligible_tiles.get_mut(tile_attempted_to_select.0) {
-        status.selected = !status.selected;
+    if let Some(critera) = critera.0 {
+        let mut selected_list = Vec::new();
+
+        for (tile, eligibility) in previously_eligibe {
+            if eligibility.selected {
+                selected_list.push(tile)
+            }
+        }
+
+        if critera.maximum_amount_of_selected_tiles_allowed <= selected_list.len() {
+            for (tile, _, _) in tiles {
+                if !selected_list.contains(&tile) {
+                    commands.entity(tile).remove::<IsEligible>();
+                }
+            }
+            return;
+        }
+
+        match critera.method {
+            MethodForDeterminingEligibility::AllTiles => {
+                for (tile, _, is_already_eligible) in tiles {
+                    // this is an execption to the pattern laid out in the other match arms
+                    if !is_already_eligible {
+                        commands.entity(tile).insert(IsEligible { selected: false });
+                    }
+                }
+            }
+            MethodForDeterminingEligibility::AllPieces => {
+                for (tile, is_occupied, is_already_eligible) in tiles {
+                    let eligible = is_occupied; // put the condition logic here.
+
+                    if !eligible {
+                        commands.entity(tile).try_remove::<IsEligible>();
+                    } else if !is_already_eligible {
+                        commands.entity(tile).insert(IsEligible { selected: false });
+                    }
+                }
+            }
+            MethodForDeterminingEligibility::UnoccupiedTiles => {
+                for (tile, is_occupied, is_already_eligible) in tiles {
+                    let eligible = !is_occupied;
+
+                    if !eligible {
+                        commands.entity(tile).try_remove::<IsEligible>();
+                    } else if !is_already_eligible {
+                        commands.entity(tile).insert(IsEligible { selected: false });
+                    }
+                }
+            }
+        }
     } else {
-        println!("Attempted to select a tile, but it was inelligible.")
+        for (tile, _) in previously_eligibe {
+            commands.entity(tile).remove::<IsEligible>();
+        }
+    }
+}
+
+fn clear_eligible(eligible: Query<Entity, With<IsEligible>>, mut commands: Commands) {
+    for tile in eligible {
+        commands.entity(tile).remove::<IsEligible>();
+    }
+}
+
+fn handle_selection_requests(
+    request: On<SelectionRequest>,
+    mut eligible: Query<&mut IsEligible>,
+    mut commands: Commands,
+) {
+    if let Ok(mut eligibility) = eligible.get_mut(request.0) {
+        eligibility.selected = !eligibility.selected;
+        commands.run_schedule(EvaluateEligibility);
+    } else {
+        warn!("Attempted to select an ineligible tile.")
     }
 }
