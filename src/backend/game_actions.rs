@@ -171,6 +171,7 @@ fn load_action_data_into_resources(
     functionality.0 = Some(action_data.0.functionality);
     selection_critera.0 = Some(action_data.0.valid_selections);
     println!("changing the loaded action");
+    commands.run_system_cached(clear_eligible);
     commands.run_schedule(EvaluateEligibility);
 }
 
