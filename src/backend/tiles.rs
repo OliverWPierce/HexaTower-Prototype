@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use hex_grid_tools::ADJACENTS;
 
-use crate::backend::BackEndUpdateSystems;
+use crate::backend::BackEndSystems;
 use crate::backend::game_parameters::{BoardSize, SetUpBoard};
 use crate::backend::tiles::hex_grid_tools::{GenerationMode, hex_cords};
 pub struct TilesPlugin;
@@ -14,7 +14,7 @@ impl Plugin for TilesPlugin {
         app.init_resource::<ActiveTile>();
 
         app.add_systems(SetUpBoard, (spawn_tiles, find_adjacenents).chain());
-        app.add_systems(Update, delete_tiles.in_set(BackEndUpdateSystems));
+        app.add_systems(Update, delete_tiles.in_set(BackEndSystems));
     }
 }
 

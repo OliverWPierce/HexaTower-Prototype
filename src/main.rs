@@ -7,7 +7,7 @@ use backend::GameLogic;
 mod frontend;
 use frontend::InputAndGraphics;
 
-use crate::{backend::BackEndUpdateSystems, frontend::FrontEndUpdateSystems};
+use crate::{backend::BackEndSystems, frontend::FrontEndUpdateSystems};
 
 fn main() -> AppExit {
     App::new()
@@ -19,9 +19,6 @@ fn main() -> AppExit {
             FrameTimeDiagnosticsPlugin::default(),
             LogDiagnosticsPlugin::default(),
         ))
-        .configure_sets(
-            Update,
-            (BackEndUpdateSystems, FrontEndUpdateSystems).chain(),
-        )
+        .configure_sets(Update, (BackEndSystems, FrontEndUpdateSystems).chain())
         .run()
 }

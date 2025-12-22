@@ -9,8 +9,8 @@ impl Plugin for InputAndGraphics {
             StartupEvents,
             VisTilesPlugin,
             VisPiecesPlugin,
+            // TileSelectionIndicationPlugin,
             InputsPlugin,
-            TileSelectionIndicationPlugin,
         ));
     }
 }

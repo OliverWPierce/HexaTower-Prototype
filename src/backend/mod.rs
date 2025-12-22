@@ -14,7 +14,7 @@ impl Plugin for GameLogic {
 }
 
 #[derive(Debug, SystemSet, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
-pub struct BackEndUpdateSystems;
+pub struct BackEndSystems;
 
 pub mod game_actions;
 pub mod game_parameters;

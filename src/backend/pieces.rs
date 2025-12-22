@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::backend::BackEndUpdateSystems;
+use crate::backend::BackEndSystems;
 
 pub struct PiecesPlugin;
 
@@ -12,7 +12,7 @@ impl Plugin for PiecesPlugin {
 
         app.add_systems(
             Update,
-            (spawn_logpiece, send_despawn_notifications).in_set(BackEndUpdateSystems),
+            (spawn_logpiece, send_despawn_notifications).in_set(BackEndSystems),
         );
     }
 }
