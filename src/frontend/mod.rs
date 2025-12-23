@@ -9,9 +9,18 @@ impl Plugin for InputAndGraphics {
             StartupEvents,
             VisTilesPlugin,
             VisPiecesPlugin,
-            // TileSelectionIndicationPlugin,
+            TileSelectionIndicationPlugin,
             InputsPlugin,
         ));
+
+        app.configure_sets(
+            ActionOrSelectionChanged,
+            (BackEndSystems, FrontEndUpdateSystems).chain(),
+        );
+        app.configure_sets(
+            ExecuteSelectedAction,
+            (BackEndSystems, FrontEndUpdateSystems).chain(),
+        );
     }
 }
 
@@ -31,3 +40,8 @@ pub use startup::StartupEvents;
 pub use tile_selection_indicators::TileSelectionIndicationPlugin;
 pub use visual_pieces::VisPiecesPlugin;
 pub use visual_tiles::VisTilesPlugin;
+
+use crate::backend::{
+    BackEndSystems,
+    game_actions::{ActionOrSelectionChanged, ExecuteSelectedAction},
+};

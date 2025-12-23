@@ -1,11 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    backend::{
-        game_actions::{LogicallySelected, SelectLogTile},
-        pieces::OccupiesTile,
-        tiles::LogicalTileLocation,
-    },
+    backend::{game_actions::SelectLogTile, pieces::OccupiesTile},
     frontend::{visual_pieces::VisPieceOf, visual_tiles::VisTileOf},
 };
 
