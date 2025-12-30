@@ -1,20 +1,15 @@
-use bevy::{prelude::*, time::Stopwatch};
-use rand::{rng, seq::IteratorRandom};
+use bevy::prelude::*;
 
-use crate::{
-    backend::{
-        game_actions::{ActionOrSelectionChanged, EligibileForNextSelection, LogicallySelected},
-        game_parameters::SetUpBoard,
-        tiles::{LogTileDeleted, LogicalTileCreated, LogicalTileLocation},
-    },
-    frontend::FrontEndUpdateSystems,
+use crate::backend::{
+    game_actions::dangerous_selection_mechanics::TileSelectionStatus,
+    tiles::{LogicalTileCreated, LogicalTileLocation},
 };
 
 pub struct TileSelectionIndicationPlugin;
 
 impl Plugin for TileSelectionIndicationPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(SetUpBoard, initialize_indicator_model_handles);
+        app.add_systems(Startup, initialize_indicator_model_handles);
     }
 }
 
@@ -33,4 +28,20 @@ fn initialize_indicator_model_handles(mut commands: Commands, assets: ResMut<Ass
         not_selected_or_selectable: assets
             .load(GltfAssetLabel::Scene(0).from_asset("IneligibleMarker(Test).glb")),
     });
+}
+
+struct Indicator {
+    watches: Entity,
+}
+
+fn add_indicators(
+    mut new_log_tiles: MessageReader<LogicalTileCreated>,
+    locations: Query<(&LogicalTileLocation)>,
+    mut commands: Commands,
+) {
+    for LogicalTileCreated(log_tile) in new_log_tiles.read() {
+        let Ok(location) = locations.get(*log_tile) else {
+            panic!("A logical tile had no location")
+        };
+    }
 }

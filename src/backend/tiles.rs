@@ -13,10 +13,18 @@ impl Plugin for TilesPlugin {
         app.add_message::<DeleteLogTileRequest>();
         app.init_resource::<ActiveTile>();
 
-        app.add_systems(SetUpBoard, (spawn_tiles, find_adjacenents).chain());
+        app.add_systems(
+            SetUpBoard,
+            (spawn_tiles, find_adjacenents)
+                .chain()
+                .in_set(EssentialTileCreationSystems),
+        );
         app.add_systems(Update, delete_tiles.in_set(BackEndSystems));
     }
 }
+
+#[derive(Debug, SystemSet, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
+pub struct EssentialTileCreationSystems;
 
 // tiles go counter clockwise, starting from two o'clock.
 #[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Component, Clone, Copy)]

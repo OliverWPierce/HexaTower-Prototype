@@ -15,17 +15,19 @@ impl Plugin for InputAndGraphics {
 
         app.configure_sets(
             ActionOrSelectionChanged,
-            (BackEndSystems, FrontEndUpdateSystems).chain(),
+            (BackEndSystems, FrontEndSystems).chain(),
         );
         app.configure_sets(
             ExecuteSelectedAction,
-            (BackEndSystems, FrontEndUpdateSystems).chain(),
+            (BackEndSystems, FrontEndSystems).chain(),
         );
+
+        app.configure_sets(SetUpBoard, (BackEndSystems, FrontEndSystems).chain());
     }
 }
 
 #[derive(Debug, SystemSet, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
-pub struct FrontEndUpdateSystems;
+pub struct FrontEndSystems;
 
 mod cameras;
 mod inputs;
@@ -44,4 +46,5 @@ pub use visual_tiles::VisTilesPlugin;
 use crate::backend::{
     BackEndSystems,
     game_actions::{ActionOrSelectionChanged, ExecuteSelectedAction},
+    game_parameters::SetUpBoard,
 };

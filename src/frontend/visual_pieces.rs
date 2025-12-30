@@ -6,7 +6,7 @@ use crate::{
         pieces::{BasePieceType, LogPieceDespawned, LogPieceSpawned, OccupiesTile},
         tiles::LogicalTileLocation,
     },
-    frontend::FrontEndUpdateSystems,
+    frontend::FrontEndSystems,
 };
 
 pub struct VisPiecesPlugin;
@@ -21,7 +21,7 @@ impl Plugin for VisPiecesPlugin {
                 scale_visuals,
                 start_scale_out_for_destroyed_pieces,
             )
-                .in_set(FrontEndUpdateSystems),
+                .in_set(FrontEndSystems),
         );
     }
 }

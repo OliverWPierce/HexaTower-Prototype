@@ -5,7 +5,7 @@ use crate::{
         game_parameters::SetUpBoard,
         tiles::{LogTileDeleted, LogicalTileCreated, LogicalTileLocation},
     },
-    frontend::FrontEndUpdateSystems,
+    frontend::FrontEndSystems,
 };
 
 pub struct VisTilesPlugin;
@@ -17,7 +17,7 @@ impl Plugin for VisTilesPlugin {
 
         app.add_systems(
             Update,
-            (delete_vis_tiles, scale_new_spawns).in_set(FrontEndUpdateSystems),
+            (delete_vis_tiles, scale_new_spawns).in_set(FrontEndSystems),
         );
     }
 }

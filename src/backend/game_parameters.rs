@@ -16,11 +16,8 @@ use bevy::ecs::schedule::ScheduleLabel;
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct SetUpBoard;
 
-fn set_up_resources_and_kickoff_setup_sequence(
-    event_triggered: On<CreateGame>,
-    mut commands: Commands,
-) {
-    commands.insert_resource(event_triggered.board_size);
+fn set_up_resources_and_kickoff_setup_sequence(game: On<CreateGame>, mut commands: Commands) {
+    commands.insert_resource(game.board_size);
 
     commands.run_schedule(SetUpBoard);
 }
