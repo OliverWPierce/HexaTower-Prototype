@@ -23,7 +23,7 @@ impl Plugin for GameActionsPlugin {
 
         app.add_systems(
             ActionOrSelectionChanged,
-            evaluate_method_eligibility.in_set(BackEndSystems),
+            evaluate_tiles.in_set(BackEndSystems),
         );
 
         app.add_systems(
@@ -62,8 +62,9 @@ pub struct ExecuteSelectedAction;
 #[derive(Debug, Component)]
 pub struct LogicallySelected;
 
+// selected tiles are not eligible for the next selection
 #[derive(Debug, Component)]
-pub struct EligibleForSelection;
+pub struct EligibileForNextSelection;
 
 fn execute_action(
     mut action: ResMut<CurrentAction>,
@@ -96,43 +97,67 @@ fn execute_action(
 #[derive(Debug, ScheduleLabel, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ActionOrSelectionChanged;
 
-fn evaluate_method_eligibility(
+fn evaluate_tiles(
     tile_info: Query<(Entity, Has<OccupiedByPiece>), With<LogicalTileLocation>>,
-    selected_tiles: Query<(Entity), With<LogicallySelected>>,
+    selected_tiles: Query<Entity, With<LogicallySelected>>,
     action: Res<CurrentAction>,
     mut commands: Commands,
 ) {
-    if let Some(action_info) = &action.0 {
-        if selected_tiles.count() < action_info.maximum_selected_tiles {
-            match action_info.eligibility_method {
-                EligibilityDeterminationMethod::AllTiles => {
-                    for (log_tile, _) in tile_info {
-                        commands.entity(log_tile).insert(EligibleForSelection);
-                    }
+    let Some(action_info) = &action.0 else { return };
+    if selected_tiles.count() >= action_info.maximum_selected_tiles {
+        for (tile, _) in tile_info {
+            if !selected_tiles.contains(tile) {
+                commands.entity(tile).remove::<EligibileForNextSelection>();
+            }
+        }
+        return;
+    }
+
+    // Note: each implementation of the method must ensure that nothing is selected and eligible at the same time.
+    match action_info.eligibility_method {
+        EligibilityDeterminationMethod::AllTiles => {
+            for (log_tile, _) in tile_info {
+                if selected_tiles.contains(log_tile) {
+                    commands
+                        .entity(log_tile)
+                        .remove::<EligibileForNextSelection>();
+                    continue;
                 }
-                EligibilityDeterminationMethod::AllPieces => {
-                    for (log_tile, is_occupied) in tile_info {
-                        if is_occupied {
-                            commands.entity(log_tile).insert(EligibleForSelection);
-                        } else {
-                            commands.entity(log_tile).remove::<EligibleForSelection>();
-                        }
-                    }
+                commands.entity(log_tile).insert(EligibileForNextSelection);
+            }
+        }
+        EligibilityDeterminationMethod::AllPieces => {
+            for (log_tile, is_occupied) in tile_info {
+                if selected_tiles.contains(log_tile) {
+                    commands
+                        .entity(log_tile)
+                        .remove::<EligibileForNextSelection>();
+                    continue;
                 }
-                EligibilityDeterminationMethod::UnoccupiedTiles => {
-                    for (log_tile, is_occupied) in tile_info {
-                        if !is_occupied {
-                            commands.entity(log_tile).insert(EligibleForSelection);
-                        } else {
-                            commands.entity(log_tile).remove::<EligibleForSelection>();
-                        }
-                    }
+
+                if is_occupied {
+                    commands.entity(log_tile).insert(EligibileForNextSelection);
+                } else {
+                    commands
+                        .entity(log_tile)
+                        .remove::<EligibileForNextSelection>();
                 }
             }
-        } else {
-            for (tile, _) in tile_info {
-                if !selected_tiles.contains(tile) {
-                    commands.entity(tile).remove::<EligibleForSelection>();
+        }
+        EligibilityDeterminationMethod::UnoccupiedTiles => {
+            for (log_tile, is_occupied) in tile_info {
+                if selected_tiles.contains(log_tile) {
+                    commands
+                        .entity(log_tile)
+                        .remove::<EligibileForNextSelection>();
+                    continue;
+                }
+                if !is_occupied {
+                    commands.entity(log_tile).insert(EligibileForNextSelection);
+                } else {
+                    commands
+                        .entity(log_tile)
+                        .remove::<EligibileForNextSelection>();
                 }
             }
         }
@@ -174,7 +199,7 @@ fn handle_action_change(
     for tile in all_tiles {
         commands
             .entity(tile)
-            .remove::<(LogicallySelected, EligibleForSelection)>();
+            .remove::<(LogicallySelected, EligibileForNextSelection)>();
     }
     commands.run_schedule(ActionOrSelectionChanged);
 }
@@ -184,7 +209,8 @@ pub struct SelectLogTile(pub Entity);
 
 fn select_tile(
     tile: On<SelectLogTile>,
-    eligible_for_selection: Query<(), With<EligibleForSelection>>,
+    eligible_for_selection: Query<(), With<EligibileForNextSelection>>,
+
     mut commands: Commands,
 ) {
     if eligible_for_selection.contains(tile.0) {
