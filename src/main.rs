@@ -16,8 +16,8 @@ fn main() -> AppExit {
             GameLogic,
             InputAndGraphics,
             MeshPickingPlugin,
-            FrameTimeDiagnosticsPlugin::default(),
-            LogDiagnosticsPlugin::default(),
+            // FrameTimeDiagnosticsPlugin::default(),
+            // LogDiagnosticsPlugin::default(),
         ))
         .configure_sets(Update, (BackEndSystems, FrontEndSystems).chain())
         .run()

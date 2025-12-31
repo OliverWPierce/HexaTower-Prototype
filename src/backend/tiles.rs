@@ -51,6 +51,8 @@ impl LogicalTileLocation {
 #[derive(Debug, Event)]
 struct BasicSpawningDone;
 
+/// BUG CAUSER: If this message is sent after the set-up cycle runs, be sure to re-evaluate selections too.
+/// Otherwise, there could be an edge case where the new tile is not considered for selection eligibility until the next evaluation.
 #[derive(Debug, Message)]
 pub struct LogicalTileCreated(pub Entity);
 
