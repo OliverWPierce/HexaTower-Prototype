@@ -28,7 +28,7 @@ pub struct EssentialTileCreationSystems;
 
 // tiles go counter clockwise, starting from two o'clock.
 #[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Component, Clone, Copy)]
-pub struct AdjacentTiles([Option<Entity>; 6]);
+pub struct AdjacentTiles(pub [Option<Entity>; 6]);
 
 #[derive(Debug, Resource, PartialEq, Eq, PartialOrd, Ord, Default)]
 struct ActiveTile(Option<Entity>);

@@ -63,6 +63,12 @@ fn tmp_send_a_load_actions(mut action: ResMut<CurrentAction>, inputs: Res<Button
             EligibilityDeterminationMethod::UnoccupiedTiles,
             20,
         ));
+    } else if inputs.just_pressed(KeyCode::KeyG) {
+        action.0 = Some(ActionInfo::construct(
+            ActionFunctionality::DeleteTile,
+            EligibilityDeterminationMethod::PieceChain,
+            5,
+        ));
     }
 }
 

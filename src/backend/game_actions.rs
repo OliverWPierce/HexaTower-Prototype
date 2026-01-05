@@ -5,7 +5,9 @@ use crate::backend::{
     game_actions::dangerous_selection_mechanics::{SelectedLogTiles, TileSelectionStatus},
     game_parameters::SetUpBoard,
     pieces::{OccupiedByPiece, SpawnLogPiece},
-    tiles::{DeleteLogTileRequest, EssentialTileCreationSystems, LogicalTileCreated},
+    tiles::{
+        AdjacentTiles, DeleteLogTileRequest, EssentialTileCreationSystems, LogicalTileCreated,
+    },
 };
 
 pub struct GameActionsPlugin;
@@ -50,6 +52,7 @@ pub enum EligibilityDeterminationMethod {
     AllTiles,
     AllPieces,
     UnoccupiedTiles,
+    PieceChain,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -102,6 +105,9 @@ impl EligibilityDeterminationMethod {
                 FunctionalTileCountBounds::new(0, usize::MAX)
             }
             EligibilityDeterminationMethod::UnoccupiedTiles => {
+                FunctionalTileCountBounds::new(0, usize::MAX)
+            }
+            EligibilityDeterminationMethod::PieceChain => {
                 FunctionalTileCountBounds::new(0, usize::MAX)
             }
         }
@@ -164,7 +170,11 @@ fn execute_action(
 
 fn evaluate_tiles(
     action: Res<CurrentAction>,
-    mut tiles: Query<(&mut TileSelectionStatus, Has<OccupiedByPiece>)>,
+    mut tiles: Query<(
+        &mut TileSelectionStatus,
+        Has<OccupiedByPiece>,
+        &AdjacentTiles,
+    )>,
     selected_tiles: Res<SelectedLogTiles>,
 ) {
     let Some(ActionInfo {
@@ -177,7 +187,7 @@ fn evaluate_tiles(
     };
 
     if selected_tiles.as_read_only_list().len() >= maximum_selected_tiles {
-        for (mut selection_state, _) in tiles.iter_mut() {
+        for (mut selection_state, _, _) in tiles.iter_mut() {
             selection_state.try_make_ineligble();
         }
         return;
@@ -185,12 +195,12 @@ fn evaluate_tiles(
 
     match eligibility_method {
         EligibilityDeterminationMethod::AllTiles => {
-            for (mut selection_state, _) in tiles.iter_mut() {
+            for (mut selection_state, _, _) in tiles.iter_mut() {
                 selection_state.try_make_eligible();
             }
         }
         EligibilityDeterminationMethod::AllPieces => {
-            for (mut selection_state, is_occupied) in tiles.iter_mut() {
+            for (mut selection_state, is_occupied, _) in tiles.iter_mut() {
                 if is_occupied {
                     selection_state.try_make_eligible();
                 } else {
@@ -199,11 +209,49 @@ fn evaluate_tiles(
             }
         }
         EligibilityDeterminationMethod::UnoccupiedTiles => {
-            for (mut selection_state, is_occupied) in tiles.iter_mut() {
+            for (mut selection_state, is_occupied, _) in tiles.iter_mut() {
                 if !is_occupied {
                     selection_state.try_make_eligible();
                 } else {
                     selection_state.try_make_ineligble();
+                }
+            }
+        }
+        EligibilityDeterminationMethod::PieceChain => {
+            if selected_tiles.as_read_only_list().is_empty() {
+                for (mut selection_state, is_occupied, _) in tiles.iter_mut() {
+                    if is_occupied {
+                        selection_state.try_make_eligible();
+                    } else {
+                        selection_state.try_make_ineligble();
+                    }
+                }
+            } else {
+                for (mut selection_state, _, _) in tiles.iter_mut() {
+                    selection_state.try_make_ineligble();
+                }
+
+                for log_tile in selected_tiles.as_read_only_list() {
+                    let Ok((_, _, adjacents)) = tiles.get(*log_tile) else {
+                        error!("A tile had no adjacent tiles component");
+                        continue;
+                    };
+
+                    for possible_tile in adjacents.0 {
+                        let Some(adjacent_tile) = possible_tile else {
+                            continue;
+                        };
+
+                        let Ok((mut selection_state, is_occupied, _)) =
+                            tiles.get_mut(adjacent_tile)
+                        else {
+                            error!("An entity listed as adjacent to a tile was not a tile");
+                            continue;
+                        };
+                        if is_occupied {
+                            selection_state.try_make_eligible();
+                        }
+                    }
                 }
             }
         }
