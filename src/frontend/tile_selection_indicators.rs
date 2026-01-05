@@ -58,9 +58,6 @@ fn spawn_indicators(
     let options = -2..2;
     let mut rng = rng();
 
-    let eligible = SceneRoot(meshes.selectable_but_unselected.clone());
-    let selected = SceneRoot(meshes.selected.clone());
-
     for LogicalTileCreated(tile) in new_tiles.read() {
         let Ok(tile_loc) = locations.get(*tile) else {
             warn!("A logical tile had no location!");
@@ -82,7 +79,7 @@ fn spawn_indicators(
                         / 16.0,
                 ))
                 .with_scale(Vec3::ZERO),
-            selected.clone(),
+            SceneRoot(meshes.selected.clone()),
             TileWatched(*tile),
             RepresentsState(SelectionState::Selected),
             MapValue(0.0),
@@ -103,7 +100,7 @@ fn spawn_indicators(
                         / 16.0,
                 ))
                 .with_scale(Vec3::ZERO),
-            eligible.clone(),
+            SceneRoot(meshes.selectable_but_unselected.clone()),
             TileWatched(*tile),
             RepresentsState(SelectionState::Eligible),
             MapValue(0.0),

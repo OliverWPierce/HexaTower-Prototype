@@ -88,7 +88,6 @@ fn send_despawn_notifications(
     mut despawns: MessageWriter<LogPieceDespawned>,
 ) {
     for logical_piece in despawned_logical_pieces.read() {
-        println!("a logical piece was despawned.");
         despawns.write(LogPieceDespawned(logical_piece));
     }
 }
