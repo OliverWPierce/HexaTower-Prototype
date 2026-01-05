@@ -11,6 +11,7 @@ impl Plugin for InputAndGraphics {
             VisPiecesPlugin,
             TileSelectionIndicationPlugin,
             InputsPlugin,
+            InGameUI,
         ));
 
         app.configure_sets(
@@ -30,6 +31,7 @@ impl Plugin for InputAndGraphics {
 pub struct FrontEndSystems;
 
 mod cameras;
+mod in_game_ui;
 mod inputs;
 mod startup;
 mod tile_selection_indicators;
@@ -37,6 +39,7 @@ mod visual_pieces;
 mod visual_tiles;
 
 pub use cameras::TmpCamAndLights;
+pub use in_game_ui::InGameUI;
 pub use inputs::InputsPlugin;
 pub use startup::StartupEvents;
 pub use tile_selection_indicators::TileSelectionIndicationPlugin;

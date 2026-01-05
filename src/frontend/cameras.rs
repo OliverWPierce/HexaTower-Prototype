@@ -1,17 +1,21 @@
 use std::f32::consts::PI;
 
 use crate::backend::game_parameters::{BoardSize, SetUpBoard};
-use bevy::prelude::*;
+use bevy::{camera::Viewport, prelude::*, window::WindowResized};
 
 pub struct TmpCamAndLights;
 
 impl Plugin for TmpCamAndLights {
     fn build(&self, app: &mut App) {
-        app.add_systems(SetUpBoard, (lights, cameras));
+        app.add_systems(SetUpBoard, (lights, cam_3d, ui_cam));
+        app.add_systems(SetUpBoard, initial_resize_event.after(cam_3d));
+        app.add_systems(Update, resize_3d_viewport);
     }
 }
+#[derive(Debug, Component)]
+struct InGame3dCam;
 
-fn cameras(board_size: Res<BoardSize>, mut commands: Commands) {
+fn cam_3d(board_size: Res<BoardSize>, mut commands: Commands) {
     let distance = match *board_size {
         BoardSize::Small => 16.0,
         BoardSize::Medium => 22.0,
@@ -35,6 +39,11 @@ fn cameras(board_size: Res<BoardSize>, mut commands: Commands) {
             )
             .looking_at(Vec3::ZERO, Vec3::Y),
         Camera3d::default(),
+        Camera {
+            order: 0,
+            ..Default::default()
+        },
+        InGame3dCam,
     ));
 }
 
@@ -58,4 +67,57 @@ fn lights(mut commands: Commands) {
         },
         Transform::default().with_translation(vec3(0.0, 2.5, 0.0)),
     ));
+}
+
+fn ui_cam(mut commands: Commands) {
+    commands.spawn((
+        Camera2d,
+        IsDefaultUiCamera,
+        Camera {
+            order: 1,
+            ..default()
+        },
+    ));
+}
+
+const LOWER_PANEL_PX_HEIGHT: f32 = 100.0 / 3.0;
+const LEFT_PANEL_PX_WIDTH: f32 = 20.0;
+const RIGHT_PANEL_PX_WIDTH: f32 = 20.0;
+
+fn resize_3d_viewport(
+    windows: Query<&Window>,
+    mut resize_events: MessageReader<WindowResized>,
+    mut cam_3d: Single<&mut Camera, With<InGame3dCam>>,
+) {
+    for resize_event in resize_events.read() {
+        let window = windows.get(resize_event.window).unwrap();
+
+        cam_3d.viewport = Some(Viewport {
+            physical_position: UVec2 {
+                x: window.physical_width() * (LEFT_PANEL_PX_WIDTH as u32) / 100,
+                y: 0,
+            },
+            physical_size: UVec2 {
+                x: window.physical_width()
+                    * ((100.0 - LEFT_PANEL_PX_WIDTH - RIGHT_PANEL_PX_WIDTH) as u32)
+                    / 100,
+                y: window.physical_height() * ((100.0 - LOWER_PANEL_PX_HEIGHT) as u32) / 100,
+            },
+            ..default()
+        });
+    }
+}
+
+// this system just emits an event with the same window info as it starts with to get the "resize_3d_viewport" function to run without the player needing to resize the window.
+fn initial_resize_event(
+    mut writer: MessageWriter<WindowResized>,
+    windows: Query<(&Window, Entity)>,
+) {
+    for (window, window_entity) in windows {
+        writer.write(WindowResized {
+            window: window_entity,
+            width: window.width(),
+            height: window.height(),
+        });
+    }
 }
