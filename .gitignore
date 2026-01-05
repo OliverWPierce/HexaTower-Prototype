@@ -26,3 +26,6 @@ target/
 # already existing elements were commented out
 
 #/target
+
+# Mac os
+*.DS_Store
