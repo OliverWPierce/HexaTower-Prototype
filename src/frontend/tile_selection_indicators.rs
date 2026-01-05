@@ -1,19 +1,11 @@
-use core::panic;
-use std::f32::consts::PI;
-
-use bevy::{prelude::*, time::Stopwatch};
+use bevy::prelude::*;
 use rand::{rng, seq::IteratorRandom};
 
 use crate::{
     backend::{
-        game_actions::{
-            ActionOrSelectionChanged, EligibilityDeterminationMethod,
-            dangerous_selection_mechanics::{SelectionState, TileSelectionStatus},
-        },
+        game_actions::dangerous_selection_mechanics::{SelectionState, TileSelectionStatus},
         game_parameters::SetUpBoard,
-        tiles::{
-            EssentialTileCreationSystems, LogTileDeleted, LogicalTileCreated, LogicalTileLocation,
-        },
+        tiles::{LogicalTileCreated, LogicalTileLocation},
     },
     frontend::FrontEndSystems,
 };
@@ -24,9 +16,10 @@ impl Plugin for TileSelectionIndicationPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(SetUpBoard, initialize_indicator_model_handles);
 
-        app.init_resource::<TimeSinceLastTileEvaluation>();
-
-        app.add_systems(Update, spawn_indicators);
+        app.add_systems(
+            Update,
+            (spawn_indicators, scale_indicators).in_set(FrontEndSystems),
+        );
     }
 }
 
@@ -38,7 +31,7 @@ struct IndicatorHandles {
 
 fn initialize_indicator_model_handles(mut commands: Commands, assets: ResMut<AssetServer>) {
     commands.insert_resource(IndicatorHandles {
-        selected: assets.load(GltfAssetLabel::Scene(0).from_asset("IneligibleMarker(Test).glb")),
+        selected: assets.load(GltfAssetLabel::Scene(0).from_asset("3d Selected Indicator.glb")),
         selectable_but_unselected: assets
             .load(GltfAssetLabel::Scene(0).from_asset("3d Selectable Indicator.glb")),
         // not_selected_or_selectable: assets
@@ -49,29 +42,12 @@ fn initialize_indicator_model_handles(mut commands: Commands, assets: ResMut<Ass
 #[derive(Debug, Component)]
 struct TileWatched(Entity);
 
+/// The "x" value of the graph of the function describing an indicator's scale.
 #[derive(Debug, Component)]
-struct TargetState(SelectionState);
+struct MapValue(f32);
 
 #[derive(Debug, Component)]
-struct MeshEntities {
-    selected: Entity,
-    eligible: Entity,
-}
-
-#[derive(Debug, Component)]
-struct AnimationInstructions {
-    offset: f32,
-    mode: ScaleMode,
-}
-#[derive(Debug)]
-enum ScaleMode {
-    In { to_selected: bool },
-    Pop,
-    Out { despawn: bool },
-}
-
-#[derive(Debug, Resource, Default)]
-struct TimeSinceLastTileEvaluation(Stopwatch);
+struct RepresentsState(SelectionState);
 
 fn spawn_indicators(
     mut new_tiles: MessageReader<LogicalTileCreated>,
@@ -82,7 +58,7 @@ fn spawn_indicators(
     let options = -2..2;
     let mut rng = rng();
 
-    let selectable = SceneRoot(meshes.selectable_but_unselected.clone());
+    let eligible = SceneRoot(meshes.selectable_but_unselected.clone());
     let selected = SceneRoot(meshes.selected.clone());
 
     for LogicalTileCreated(tile) in new_tiles.read() {
@@ -91,90 +67,90 @@ fn spawn_indicators(
             return;
         };
 
-        let indicator_parent = commands
-            .spawn((
-                Transform::default()
-                    .with_translation(Vec3 {
-                        x: tile_loc.read().x,
-                        y: 0.0,
-                        z: tile_loc.read().y,
-                    })
-                    .with_rotation(Quat::from_rotation_y(
-                        options
-                            .clone()
-                            .choose(&mut rng)
-                            .expect("the rotation range had length zero")
-                            as f32
-                            / 16.0,
-                    )),
-                TileWatched(*tile),
-                TargetState(SelectionState::Neither),
-            ))
-            .id();
+        commands.spawn((
+            Transform::default()
+                .with_translation(Vec3 {
+                    x: tile_loc.read().x,
+                    y: 0.0,
+                    z: tile_loc.read().y,
+                })
+                .with_rotation(Quat::from_rotation_y(
+                    options
+                        .clone()
+                        .choose(&mut rng)
+                        .expect("the rotation range had length zero") as f32
+                        / 16.0,
+                ))
+                .with_scale(Vec3::ZERO),
+            selected.clone(),
+            TileWatched(*tile),
+            RepresentsState(SelectionState::Selected),
+            MapValue(0.0),
+        ));
 
-        let selected_indicator = commands
-            .spawn((
-                Transform::default(),
-                selected.clone(),
-                Visibility::Hidden,
-                ChildOf(indicator_parent),
-            ))
-            .id();
-        let selectable_indicator = commands
-            .spawn((
-                Transform::default(),
-                selectable.clone(),
-                Visibility::Hidden,
-                ChildOf(indicator_parent),
-            ))
-            .id();
-
-        commands.entity(indicator_parent).insert(MeshEntities {
-            selected: selected_indicator,
-            eligible: selectable_indicator,
-        });
-
-        println!("Spawned an indicator.")
+        commands.spawn((
+            Transform::default()
+                .with_translation(Vec3 {
+                    x: tile_loc.read().x,
+                    y: 0.0,
+                    z: tile_loc.read().y,
+                })
+                .with_rotation(Quat::from_rotation_y(
+                    options
+                        .clone()
+                        .choose(&mut rng)
+                        .expect("the rotation range had length zero") as f32
+                        / 16.0,
+                ))
+                .with_scale(Vec3::ZERO),
+            eligible.clone(),
+            TileWatched(*tile),
+            RepresentsState(SelectionState::Eligible),
+            MapValue(0.0),
+        ));
     }
 }
 
-fn update_indicators(
+fn scale_indicators(
+    indicators: Query<(
+        Entity,
+        &mut Transform,
+        &mut MapValue,
+        &RepresentsState,
+        &TileWatched,
+    )>,
     tiles: Query<&TileSelectionStatus>,
-    mut indicators: Query<(Entity, &TileWatched, &mut TargetState)>,
-    mut reset_elapsed_time: ResMut<TimeSinceLastTileEvaluation>,
+    time: Res<Time>,
+    mut commands: Commands,
 ) {
-    reset_elapsed_time.0.reset();
+    let delta = time.delta_secs();
+    const OVERSHOOT: f32 = 1.2;
+    const SPEED: f32 = 3.5;
 
-    for (indicator, log_tile_watched, mut target_state) in indicators.iter_mut() {
-        if let Ok(tile_state) = tiles.get(log_tile_watched.0) {
-            match tile_state.read() {
-                SelectionState::Selected => {
-                    match target_state.0 {
-                        SelectionState::Selected => (),
-                        SelectionState::Eligible => todo!(), //Pop
-                        SelectionState::Neither => todo!(),  // Scale in
-                    }
-                }
-                SelectionState::Eligible => {
-                    match target_state.0 {
-                        SelectionState::Selected => todo!(), // Pop,
-                        SelectionState::Eligible => (),
-                        SelectionState::Neither => todo!(), // scale in
-                    }
-                }
-                SelectionState::Neither => {
-                    match target_state.0 {
-                        SelectionState::Selected => todo!(), // scale out,
-                        SelectionState::Eligible => todo!(), // scale out,
-                        SelectionState::Neither => (),
-                    }
-                }
-            }
+    for (indicator, mut transform, mut x, state, watched) in indicators {
+        if let Ok(watched_state) = tiles.get(watched.0) {
+            x.0 = (x.0
+                + if watched_state.read() == state.0 {
+                    delta * SPEED
+                } else {
+                    -delta * SPEED
+                })
+            .clamp(0.0, 1.0);
 
-            target_state.0 = tile_state.read()
+            let x = x.0;
+
+            transform.scale =
+                Vec3::splat((-2.0 * OVERSHOOT * x * x * x) + ((2.0 * OVERSHOOT + 1.0) * x * x));
         } else {
-            // despawn the indicator
-            // Problem: theoretically the player could keep an indicator alive indefinitely by constantly switching game actions as this would cause the animation to constantly reset.
+            x.0 -= delta * SPEED;
+            let x = x.0;
+
+            if x <= 0.0 {
+                commands.entity(indicator).despawn();
+            } else {
+                transform.scale =
+                    Vec3::splat((-2.0 * OVERSHOOT * x * x * x) + ((2.0 * OVERSHOOT + 1.0) * x * x));
+            }
         }
     }
 }
