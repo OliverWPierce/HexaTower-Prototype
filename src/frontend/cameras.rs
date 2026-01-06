@@ -80,9 +80,9 @@ fn ui_cam(mut commands: Commands) {
     ));
 }
 
-const LOWER_PANEL_PX_HEIGHT: f32 = 100.0 / 3.0;
-const LEFT_PANEL_PX_WIDTH: f32 = 20.0;
-const RIGHT_PANEL_PX_WIDTH: f32 = 20.0;
+pub const LOWER_PANEL_HEIGHT: f32 = 100.0 / 5.0;
+pub const LEFT_PANEL_WIDTH: f32 = 17.0;
+pub const RIGHT_PANEL_WIDTH: f32 = 17.0;
 
 fn resize_3d_viewport(
     windows: Query<&Window>,
@@ -94,14 +94,14 @@ fn resize_3d_viewport(
 
         cam_3d.viewport = Some(Viewport {
             physical_position: UVec2 {
-                x: window.physical_width() * (LEFT_PANEL_PX_WIDTH as u32) / 100,
+                x: window.physical_width() * (LEFT_PANEL_WIDTH as u32) / 100,
                 y: 0,
             },
             physical_size: UVec2 {
                 x: window.physical_width()
-                    * ((100.0 - LEFT_PANEL_PX_WIDTH - RIGHT_PANEL_PX_WIDTH) as u32)
+                    * ((100.0 - LEFT_PANEL_WIDTH - RIGHT_PANEL_WIDTH) as u32)
                     / 100,
-                y: window.physical_height() * ((100.0 - LOWER_PANEL_PX_HEIGHT) as u32) / 100,
+                y: window.physical_height() * ((100.0 - LOWER_PANEL_HEIGHT) as u32) / 100,
             },
             ..default()
         });
