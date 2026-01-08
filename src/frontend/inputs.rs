@@ -4,7 +4,7 @@ use crate::{
     backend::{
         game_actions::{
             ActionFunctionality, ActionInfo, CurrentAction, EligibilityDeterminationMethod,
-            ExecuteSelectedAction, dangerous_selection_mechanics::SelectLogTile,
+            dangerous_selection_mechanics::SelectLogTile,
         },
         pieces::OccupiesTile,
     },
@@ -17,7 +17,7 @@ impl Plugin for InputsPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(select_tiles);
 
-        app.add_systems(Update, (tmp_send_a_load_actions, tmp_execute_action));
+        app.add_systems(Update, (tmp_send_a_load_actions));
     }
 }
 
@@ -69,11 +69,11 @@ fn tmp_send_a_load_actions(mut action: ResMut<CurrentAction>, inputs: Res<Button
             EligibilityDeterminationMethod::PieceChain,
             5,
         ));
-    }
-}
-
-fn tmp_execute_action(inputs: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
-    if inputs.just_pressed(KeyCode::Space) {
-        commands.run_schedule(ExecuteSelectedAction);
+    } else if inputs.just_pressed(KeyCode::KeyH) {
+        action.0 = Some(ActionInfo::construct(
+            ActionFunctionality::DoubleTakeTest,
+            EligibilityDeterminationMethod::UnoccupiedTiles,
+            2,
+        ))
     }
 }

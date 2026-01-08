@@ -1,0 +1,101 @@
+mod execute_action_button;
+
+use bevy::prelude::*;
+
+use crate::{
+    backend::{game_actions::ActionOrSelectionChanged, game_parameters::SetUpBoard},
+    frontend::{
+        FrontEndSystems,
+        cameras::{LEFT_PANEL_WIDTH, LOWER_PANEL_HEIGHT, RIGHT_PANEL_WIDTH},
+        in_game_ui::execute_action_button::ExecuteActionButtonPlugin,
+    },
+};
+
+pub struct InGameUI;
+
+impl Plugin for InGameUI {
+    fn build(&self, app: &mut App) {
+        app.add_systems(SetUpBoard, create_panels);
+
+        app.add_plugins(ExecuteActionButtonPlugin);
+    }
+}
+
+const BACKGROUND_COLOR: Color = Color::srgb(0.057805, 0.068478, 0.093059);
+const BORDER_COLOR: Color = Color::srgb(0.032044, 0.038248, 0.047155);
+const BORDER_WIDTH: Val = Val::Percent(0.2);
+
+#[derive(Debug, Resource)]
+pub struct LeftPanelEnt(Entity);
+#[derive(Debug, Resource)]
+pub struct LowerPanelEnt(Entity);
+#[derive(Debug, Resource)]
+pub struct RightPanelEnt(Entity);
+
+fn create_panels(mut commands: Commands) {
+    // Lower
+    let lower = commands
+        .spawn((
+            Node {
+                left: Val::Percent(LEFT_PANEL_WIDTH),
+                right: Val::Percent(100.0 - RIGHT_PANEL_WIDTH),
+                width: Val::Percent(100.0 - RIGHT_PANEL_WIDTH - LEFT_PANEL_WIDTH),
+                top: Val::Percent(100.0 - LOWER_PANEL_HEIGHT),
+                height: Val::Percent(LOWER_PANEL_HEIGHT),
+                border: UiRect::top(BORDER_WIDTH).with_bottom(BORDER_WIDTH),
+                flex_grow: 0.0,
+                flex_shrink: 0.0,
+                justify_content: JustifyContent::SpaceEvenly,
+                ..default()
+            },
+            BackgroundColor(BACKGROUND_COLOR),
+            BorderColor::all(BORDER_COLOR),
+        ))
+        .id();
+
+    // Left
+    let left = commands
+        .spawn((
+            Node {
+                left: Val::Percent(0.0),
+                right: Val::Percent(LEFT_PANEL_WIDTH),
+                width: Val::Percent(LEFT_PANEL_WIDTH),
+                top: Val::Percent(0.0),
+                height: Val::Percent(100.0),
+                border: UiRect::all(BORDER_WIDTH),
+                flex_grow: 0.0,
+                flex_shrink: 0.0,
+                justify_content: JustifyContent::SpaceEvenly,
+                ..default()
+            },
+            BackgroundColor(BACKGROUND_COLOR),
+            BorderColor::all(BORDER_COLOR),
+        ))
+        .id();
+
+    // Right
+    let right = commands
+        .spawn((
+            Node {
+                left: Val::Percent(100.0 - RIGHT_PANEL_WIDTH),
+                right: Val::Percent(100.0),
+                width: Val::Percent(RIGHT_PANEL_WIDTH),
+                top: Val::Percent(0.0),
+                height: Val::Percent(100.0),
+                border: UiRect::all(BORDER_WIDTH),
+                flex_grow: 0.0,
+                flex_shrink: 0.0,
+                justify_content: JustifyContent::FlexStart,
+                align_items: AlignItems::Center,
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            BackgroundColor(BACKGROUND_COLOR),
+            BorderColor::all(BORDER_COLOR),
+        ))
+        .id();
+
+    commands.insert_resource(LowerPanelEnt(lower));
+    commands.insert_resource(RightPanelEnt(right));
+    commands.insert_resource(LeftPanelEnt(left));
+}

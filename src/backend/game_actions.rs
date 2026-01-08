@@ -38,6 +38,8 @@ impl Plugin for GameActionsPlugin {
         );
 
         app.add_systems(Update, (insert_selection_data,).in_set(BackEndSystems));
+
+        app.add_observer(validate_execution_request);
     }
 }
 
@@ -45,6 +47,7 @@ impl Plugin for GameActionsPlugin {
 pub enum ActionFunctionality {
     DeleteTile,
     SpawnTower,
+    DoubleTakeTest,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -84,6 +87,18 @@ impl ActionInfo {
             )
         }
     }
+    pub fn read_min_and_max_tiles(&self) -> (usize, usize) {
+        let mins = (
+            self.functionality.bounds().min_tiles,
+            self.eligibility_method.bounds().min_tiles,
+        );
+
+        if mins.0 >= mins.1 {
+            (mins.0, self.maximum_selected_tiles)
+        } else {
+            (mins.1, self.maximum_selected_tiles)
+        }
+    }
 }
 
 impl ActionFunctionality {
@@ -91,6 +106,10 @@ impl ActionFunctionality {
         match self {
             ActionFunctionality::DeleteTile => FunctionalTileCountBounds::new(0, usize::MAX),
             ActionFunctionality::SpawnTower => FunctionalTileCountBounds::new(0, usize::MAX),
+            ActionFunctionality::DoubleTakeTest => FunctionalTileCountBounds {
+                min_tiles: 2,
+                max_tiles: 2,
+            },
         }
     }
 }
@@ -163,6 +182,15 @@ fn execute_action(
                     log_tile: *log_tile,
                 });
             }
+        }
+        ActionFunctionality::DoubleTakeTest => {
+            deletions.write(DeleteLogTileRequest(
+                *(selected_tiles.as_read_only_list().get(1).unwrap()),
+            ));
+            piece_spawns.write(SpawnLogPiece {
+                piece_type: super::pieces::BasePieceType::Tower,
+                log_tile: *selected_tiles.as_read_only_list().first().unwrap(),
+            });
         }
     }
     action.0 = None;
@@ -345,5 +373,24 @@ pub mod dangerous_selection_mechanics {
             selection_list.0.push(tile.0);
             commands.run_schedule(ActionOrSelectionChanged);
         }
+    }
+}
+#[derive(Debug, Event)]
+pub struct ExecuteActionRequest;
+
+fn validate_execution_request(
+    request: On<ExecuteActionRequest>,
+    mut commands: Commands,
+    action: Res<CurrentAction>,
+    selected_tiles: Res<SelectedLogTiles>,
+) {
+    let Some(action_info) = action.0 else { return };
+
+    let amount_selected = selected_tiles.as_read_only_list().len();
+
+    if amount_selected >= action_info.functionality.bounds().min_tiles
+        && amount_selected <= action_info.functionality.bounds().max_tiles
+    {
+        commands.run_schedule(ExecuteSelectedAction);
     }
 }
