@@ -17,7 +17,7 @@ impl Plugin for InputsPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(select_tiles);
 
-        app.add_systems(Update, (tmp_send_a_load_actions));
+        app.add_systems(Update, tmp_send_a_load_actions);
     }
 }
 

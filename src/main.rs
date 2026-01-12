@@ -1,10 +1,11 @@
 use bevy::prelude::*;
 
-use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
-
 mod backend;
-use backend::GameLogic;
 mod frontend;
+
+// use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
+
+use backend::GameLogic;
 use frontend::InputAndGraphics;
 
 use crate::{backend::BackEndSystems, frontend::FrontEndSystems};

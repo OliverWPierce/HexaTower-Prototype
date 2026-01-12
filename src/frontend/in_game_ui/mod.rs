@@ -3,9 +3,8 @@ mod execute_action_button;
 use bevy::prelude::*;
 
 use crate::{
-    backend::{game_actions::ActionOrSelectionChanged, game_parameters::SetUpBoard},
+    backend::game_parameters::SetUpBoard,
     frontend::{
-        FrontEndSystems,
         cameras::{LEFT_PANEL_WIDTH, LOWER_PANEL_HEIGHT, RIGHT_PANEL_WIDTH},
         in_game_ui::execute_action_button::ExecuteActionButtonPlugin,
     },
