@@ -104,8 +104,8 @@ impl ActionInfo {
 impl ActionFunctionality {
     fn bounds(&self) -> FunctionalTileCountBounds {
         match self {
-            ActionFunctionality::DeleteTile => FunctionalTileCountBounds::new(1, usize::MAX),
-            ActionFunctionality::SpawnTower => FunctionalTileCountBounds::new(1, usize::MAX),
+            ActionFunctionality::DeleteTile => FunctionalTileCountBounds::new(0, usize::MAX),
+            ActionFunctionality::SpawnTower => FunctionalTileCountBounds::new(0, usize::MAX),
             ActionFunctionality::DoubleTakeTest => FunctionalTileCountBounds {
                 min_tiles: 2,
                 max_tiles: 2,
@@ -118,16 +118,16 @@ impl EligibilityDeterminationMethod {
     fn bounds(&self) -> FunctionalTileCountBounds {
         match &self {
             EligibilityDeterminationMethod::AllTiles => {
-                FunctionalTileCountBounds::new(2, usize::MAX)
+                FunctionalTileCountBounds::new(0, usize::MAX)
             }
             EligibilityDeterminationMethod::AllPieces => {
-                FunctionalTileCountBounds::new(1, usize::MAX)
+                FunctionalTileCountBounds::new(0, usize::MAX)
             }
             EligibilityDeterminationMethod::UnoccupiedTiles => {
-                FunctionalTileCountBounds::new(1, usize::MAX)
+                FunctionalTileCountBounds::new(0, usize::MAX)
             }
             EligibilityDeterminationMethod::PieceChain => {
-                FunctionalTileCountBounds::new(1, usize::MAX)
+                FunctionalTileCountBounds::new(0, usize::MAX)
             }
         }
     }
