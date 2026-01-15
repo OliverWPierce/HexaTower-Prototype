@@ -67,7 +67,7 @@ pub struct ActionInfo {
 }
 
 impl ActionInfo {
-    fn is_valid(&self) -> bool {
+    pub fn is_valid(&self) -> bool {
         (self.bounds().min_tiles >= self.eligibility_method.bounds().min_tiles)
             && (self.bounds().min_tiles >= self.functionality.bounds().min_tiles)
             && self.bounds().max_tiles >= self.bounds().min_tiles

@@ -1,8 +1,9 @@
 use bevy::prelude::*;
+use rand::seq::IndexedRandom;
 
 use crate::{
     backend::{
-        cards::{CardAsset, CardAssetLoader},
+        cards::{CardAsset, CardAssetLoader, CardHandles},
         game_actions::{CurrentAction, dangerous_selection_mechanics::SelectLogTile},
         pieces::OccupiesTile,
     },
@@ -13,11 +14,6 @@ pub struct InputsPlugin;
 
 impl Plugin for InputsPlugin {
     fn build(&self, app: &mut App) {
-        app.init_asset::<CardAsset>();
-        app.init_asset_loader::<CardAssetLoader>();
-
-        app.add_systems(Startup, load_card);
-
         app.add_observer(select_tiles);
         app.add_systems(Update, tmp_load_card_action);
     }
@@ -40,17 +36,8 @@ fn select_tiles(
     }
 }
 
-#[derive(Debug, Resource)]
-struct CardHandle(Handle<CardAsset>);
-
-fn load_card(server: ResMut<AssetServer>, mut commands: Commands) {
-    commands.insert_resource(CardHandle(
-        server.load("cards/card_parameters/obliteration.card"),
-    ));
-}
-
 fn tmp_load_card_action(
-    handle: Res<CardHandle>,
+    handles: Res<CardHandles>,
     assets: Res<Assets<CardAsset>>,
     mut current_action: ResMut<CurrentAction>,
     inputs: Res<ButtonInput<KeyCode>>,
@@ -61,7 +48,14 @@ fn tmp_load_card_action(
 
     println!("attempting to load the card");
 
-    let card = assets.get(handle.0.id());
+    let mut rng = rand::rng();
+
+    let Some(chosen_card) = handles.0.choose(&mut rng) else {
+        error!("there were no fully loaded cards, so no action was loaded.",);
+        return;
+    };
+
+    let card = assets.get(chosen_card.id());
 
     if card.is_none() {
         println!("failed to get the card.");

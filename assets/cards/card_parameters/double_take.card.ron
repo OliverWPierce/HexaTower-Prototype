@@ -1,0 +1,8 @@
+CardAsset (
+    name: "Double take",
+    action: ActionInfo (
+        functionality: DoubleTakeTest,
+        eligibility_method: UnoccupiedTiles,
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 2, max_tiles: 2)),
+        ),
+)

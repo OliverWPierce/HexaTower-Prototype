@@ -1,0 +1,8 @@
+CardAsset (
+    name: "Zap!",
+    action: ActionInfo (
+        functionality: DeleteTile,
+        eligibility_method: PieceChain,
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 3, max_tiles: 15)),
+        ),
+)
