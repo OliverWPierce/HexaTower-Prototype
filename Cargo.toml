@@ -6,3 +6,6 @@ edition = "2024"
 [dependencies]
 bevy = "0.17"
 rand = "0.9.1"
+ron = "0.12"
+serde = { version = "1", features = ["derive"] }
+thiserror = "2.0.17"

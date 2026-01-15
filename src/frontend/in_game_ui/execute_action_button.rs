@@ -1,7 +1,7 @@
 use crate::{
     backend::{
         game_actions::{
-            ActionOrSelectionChanged, CurrentAction, ExecuteActionRequest,
+            ActionOrSelectionChanged, CurrentAction, ExecuteActionRequest, SelectionBounds,
             dangerous_selection_mechanics::SelectedLogTiles,
         },
         game_parameters::SetUpBoard,
@@ -72,7 +72,7 @@ fn update_button(
     if let Some(action) = action.0 {
         let (button_ent, mut background, mut border) = button.into_inner();
 
-        if currently_selected.as_read_only_list().len() < action.read_min_and_max_tiles().0 {
+        if currently_selected.as_read_only_list().len() < action.bounds().min_tiles {
             *background = BackgroundColor(ACTION_NOT_READY_BACKGROUND);
             *border = BorderColor::all(ACTION_NOT_READY_BORDER);
         } else {
@@ -95,7 +95,7 @@ fn update_button(
             Text::new(format!(
                 "Selected {} / {}",
                 currently_selected.as_read_only_list().len(),
-                action.read_min_and_max_tiles().1
+                action.bounds().max_tiles
             )),
             TextLayout::new_with_justify(Justify::Center),
             TextFont {
@@ -105,10 +105,7 @@ fn update_button(
         ));
         commands.spawn((
             ChildOf(button_ent),
-            Text::new(format!(
-                "Select at least {}",
-                action.read_min_and_max_tiles().0
-            )),
+            Text::new(format!("Select at least {}", action.bounds().min_tiles)),
             TextLayout::new_with_justify(Justify::Center),
             TextFont {
                 font_size: 16.0,

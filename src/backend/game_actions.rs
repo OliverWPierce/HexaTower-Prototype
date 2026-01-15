@@ -1,4 +1,5 @@
 use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
+use serde::{Deserialize, Serialize};
 
 use crate::backend::{
     BackEndSystems,
@@ -43,14 +44,14 @@ impl Plugin for GameActionsPlugin {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect, Serialize, Deserialize)]
 pub enum ActionFunctionality {
     DeleteTile,
     SpawnTower,
     DoubleTakeTest,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect, Serialize, Deserialize)]
 pub enum EligibilityDeterminationMethod {
     AllTiles,
     AllPieces,
@@ -58,55 +59,54 @@ pub enum EligibilityDeterminationMethod {
     PieceChain,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect, Serialize, Deserialize)]
 pub struct ActionInfo {
     functionality: ActionFunctionality,
     eligibility_method: EligibilityDeterminationMethod,
-    maximum_selected_tiles: usize,
+    selection_count_bounds: GameDesignBounds,
 }
 
 impl ActionInfo {
-    pub fn construct(
-        function: ActionFunctionality,
-        method: EligibilityDeterminationMethod,
-        maximum_tiles: usize,
-    ) -> Self {
-        if maximum_tiles <= function.bounds().max_tiles
-            && maximum_tiles >= function.bounds().min_tiles
-            && maximum_tiles <= method.bounds().max_tiles
-            && maximum_tiles >= method.bounds().min_tiles
-        {
-            ActionInfo {
-                functionality: function,
-                eligibility_method: method,
-                maximum_selected_tiles: maximum_tiles,
-            }
-        } else {
-            panic!(
-                "Developer error. Attempted to create an action with a maximum number of tiles that contradicted the code's capabilities."
-            )
-        }
-    }
-    pub fn read_min_and_max_tiles(&self) -> (usize, usize) {
-        let mins = (
-            self.functionality.bounds().min_tiles,
-            self.eligibility_method.bounds().min_tiles,
-        );
-
-        if mins.0 >= mins.1 {
-            (mins.0, self.maximum_selected_tiles)
-        } else {
-            (mins.1, self.maximum_selected_tiles)
-        }
+    fn is_valid(&self) -> bool {
+        (self.bounds().min_tiles >= self.eligibility_method.bounds().min_tiles)
+            && (self.bounds().min_tiles >= self.functionality.bounds().min_tiles)
+            && self.bounds().max_tiles >= self.bounds().min_tiles
+            && self.functionality.bounds().max_tiles >= self.bounds().max_tiles
+            && self.eligibility_method.bounds().max_tiles >= self.bounds().max_tiles
     }
 }
 
-impl ActionFunctionality {
-    fn bounds(&self) -> FunctionalTileCountBounds {
+impl SelectionBounds for ActionInfo {
+    fn bounds(&self) -> Bounds {
+        self.selection_count_bounds.0
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect, Serialize, Deserialize)]
+struct GameDesignBounds(Bounds);
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect, Serialize, Deserialize)]
+pub struct Bounds {
+    pub min_tiles: usize,
+    pub max_tiles: usize,
+}
+
+pub trait SelectionBounds {
+    fn bounds(&self) -> Bounds;
+}
+
+impl SelectionBounds for ActionFunctionality {
+    fn bounds(&self) -> Bounds {
         match self {
-            ActionFunctionality::DeleteTile => FunctionalTileCountBounds::new(0, usize::MAX),
-            ActionFunctionality::SpawnTower => FunctionalTileCountBounds::new(0, usize::MAX),
-            ActionFunctionality::DoubleTakeTest => FunctionalTileCountBounds {
+            ActionFunctionality::DeleteTile => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
+            ActionFunctionality::SpawnTower => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
+            ActionFunctionality::DoubleTakeTest => Bounds {
                 min_tiles: 2,
                 max_tiles: 2,
             },
@@ -114,35 +114,25 @@ impl ActionFunctionality {
     }
 }
 
-impl EligibilityDeterminationMethod {
-    fn bounds(&self) -> FunctionalTileCountBounds {
-        match &self {
-            EligibilityDeterminationMethod::AllTiles => {
-                FunctionalTileCountBounds::new(0, usize::MAX)
-            }
-            EligibilityDeterminationMethod::AllPieces => {
-                FunctionalTileCountBounds::new(0, usize::MAX)
-            }
-            EligibilityDeterminationMethod::UnoccupiedTiles => {
-                FunctionalTileCountBounds::new(0, usize::MAX)
-            }
-            EligibilityDeterminationMethod::PieceChain => {
-                FunctionalTileCountBounds::new(0, usize::MAX)
-            }
-        }
-    }
-}
-
-struct FunctionalTileCountBounds {
-    min_tiles: usize,
-    max_tiles: usize,
-}
-
-impl FunctionalTileCountBounds {
-    fn new(min: usize, max: usize) -> Self {
-        FunctionalTileCountBounds {
-            max_tiles: max,
-            min_tiles: min,
+impl SelectionBounds for EligibilityDeterminationMethod {
+    fn bounds(&self) -> Bounds {
+        match self {
+            EligibilityDeterminationMethod::AllTiles => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
+            EligibilityDeterminationMethod::AllPieces => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
+            EligibilityDeterminationMethod::UnoccupiedTiles => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
+            EligibilityDeterminationMethod::PieceChain => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
         }
     }
 }
@@ -207,14 +197,14 @@ fn evaluate_tiles(
 ) {
     let Some(ActionInfo {
         eligibility_method,
-        maximum_selected_tiles,
+        selection_count_bounds,
         ..
     }) = action.0
     else {
         return;
     };
 
-    if selected_tiles.as_read_only_list().len() >= maximum_selected_tiles {
+    if selected_tiles.as_read_only_list().len() >= selection_count_bounds.0.max_tiles {
         for (mut selection_state, _, _) in tiles.iter_mut() {
             selection_state.try_make_ineligble();
         }

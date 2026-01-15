@@ -2,22 +2,24 @@ use bevy::prelude::*;
 
 use crate::{
     backend::{
-        game_actions::{
-            ActionFunctionality, ActionInfo, CurrentAction, EligibilityDeterminationMethod,
-            dangerous_selection_mechanics::SelectLogTile,
-        },
+        cards::{CardAsset, CardAssetLoader},
+        game_actions::{CurrentAction, dangerous_selection_mechanics::SelectLogTile},
         pieces::OccupiesTile,
     },
-    frontend::{visual_pieces::VisPieceOf, visual_tiles::VisTileOf},
+    frontend::{FrontEndSystems, visual_pieces::VisPieceOf, visual_tiles::VisTileOf},
 };
 
 pub struct InputsPlugin;
 
 impl Plugin for InputsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(select_tiles);
+        app.init_asset::<CardAsset>();
+        app.init_asset_loader::<CardAssetLoader>();
 
-        app.add_systems(Update, tmp_send_a_load_actions);
+        app.add_systems(Startup, load_card);
+
+        app.add_observer(select_tiles);
+        app.add_systems(Update, tmp_load_card_action);
     }
 }
 
@@ -38,42 +40,34 @@ fn select_tiles(
     }
 }
 
-fn tmp_send_a_load_actions(mut action: ResMut<CurrentAction>, inputs: Res<ButtonInput<KeyCode>>) {
-    if inputs.just_pressed(KeyCode::KeyA) {
-        action.0 = Some(ActionInfo::construct(
-            ActionFunctionality::DeleteTile,
-            EligibilityDeterminationMethod::AllTiles,
-            5,
-        ));
-    } else if inputs.just_pressed(KeyCode::KeyS) {
-        action.0 = Some(ActionInfo::construct(
-            ActionFunctionality::SpawnTower,
-            EligibilityDeterminationMethod::UnoccupiedTiles,
-            3,
-        ));
-    } else if inputs.just_pressed(KeyCode::KeyD) {
-        action.0 = Some(ActionInfo::construct(
-            ActionFunctionality::DeleteTile,
-            EligibilityDeterminationMethod::AllPieces,
-            2,
-        ));
-    } else if inputs.just_pressed(KeyCode::KeyF) {
-        action.0 = Some(ActionInfo::construct(
-            ActionFunctionality::SpawnTower,
-            EligibilityDeterminationMethod::UnoccupiedTiles,
-            20,
-        ));
-    } else if inputs.just_pressed(KeyCode::KeyG) {
-        action.0 = Some(ActionInfo::construct(
-            ActionFunctionality::DeleteTile,
-            EligibilityDeterminationMethod::PieceChain,
-            5,
-        ));
-    } else if inputs.just_pressed(KeyCode::KeyH) {
-        action.0 = Some(ActionInfo::construct(
-            ActionFunctionality::DoubleTakeTest,
-            EligibilityDeterminationMethod::UnoccupiedTiles,
-            2,
-        ))
+#[derive(Debug, Resource)]
+struct CardHandle(Handle<CardAsset>);
+
+fn load_card(server: ResMut<AssetServer>, mut commands: Commands) {
+    commands.insert_resource(CardHandle(
+        server.load("cards/card_parameters/obliteration.card"),
+    ));
+}
+
+fn tmp_load_card_action(
+    handle: Res<CardHandle>,
+    assets: Res<Assets<CardAsset>>,
+    mut current_action: ResMut<CurrentAction>,
+    inputs: Res<ButtonInput<KeyCode>>,
+) {
+    if !inputs.just_pressed(KeyCode::Space) {
+        return;
     }
+
+    println!("attempting to load the card");
+
+    let card = assets.get(handle.0.id());
+
+    if card.is_none() {
+        println!("failed to get the card.");
+        return;
+    }
+    println!("Loaded card {}", card.unwrap().name);
+
+    current_action.0 = Some(card.unwrap().action);
 }
