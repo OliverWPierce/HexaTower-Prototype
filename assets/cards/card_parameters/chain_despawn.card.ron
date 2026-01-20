@@ -5,4 +5,5 @@ CardAsset (
         eligibility_method: PieceChain,
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 3, max_tiles: 15)),
         ),
+    image_path: "cards/card_images/GoldProjectiles.png",
 )

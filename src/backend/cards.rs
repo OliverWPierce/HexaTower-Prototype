@@ -1,16 +1,21 @@
 use bevy::{
     asset::{AssetLoader, LoadedFolder},
     prelude::*,
+    transform::commands,
 };
+use rand::seq::{IndexedRandom, IteratorRandom};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::backend::{cards, game_actions::ActionInfo, game_parameters::SetUpBoard};
+use crate::backend::{
+    BackEndSystems, cards, game_actions::ActionInfo, game_parameters::SetUpBoard,
+};
 
-#[derive(Debug, Asset, Reflect, Serialize, Deserialize)]
+#[derive(Debug, Asset, Reflect, Serialize, Deserialize, Clone)]
 pub struct CardAsset {
     pub name: String,
     pub action: ActionInfo,
+    pub image_path: String,
 }
 
 #[derive(Debug, Default, TypePath)]
@@ -55,12 +60,14 @@ impl Plugin for CardsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CardHandles>();
         app.init_resource::<CardFolderAsset>();
+        app.init_resource::<TmpLogCardInventory>();
 
         app.init_asset::<CardAsset>();
         app.init_asset_loader::<CardAssetLoader>();
 
         app.add_systems(SetUpBoard, open_card_folder);
-        app.add_systems(Update, validate_and_sort_newly_loaded_cards);
+        app.add_systems(Update, (validate_and_sort_newly_loaded_cards));
+        app.add_systems(Update, tmp_form_inventory.in_set(BackEndSystems));
     }
 }
 
@@ -104,5 +111,40 @@ fn validate_and_sort_newly_loaded_cards(
             }
             _ => continue,
         }
+    }
+}
+
+#[derive(Debug, Component)]
+pub struct LogCard(pub Handle<CardAsset>);
+
+#[derive(Debug, Resource, Default)]
+pub struct TmpLogCardInventory(pub Vec<Entity>);
+
+fn tmp_form_inventory(
+    inputs: Res<ButtonInput<KeyCode>>,
+    mut inventory: ResMut<TmpLogCardInventory>,
+    sorted_cards: ResMut<CardHandles>,
+    mut commands: Commands,
+) {
+    if !inputs.just_pressed(KeyCode::KeyR) {
+        return;
+    }
+
+    for ent in inventory.0.iter() {
+        commands.entity(*ent).despawn();
+    }
+
+    inventory.0.clear();
+
+    let mut rng = rand::rng();
+
+    let card_count: u32 = (1..9).choose(&mut rng).unwrap();
+
+    for _ in 0..card_count {
+        inventory.0.push(
+            commands
+                .spawn(LogCard(sorted_cards.0.choose(&mut rng).unwrap().clone()))
+                .id(),
+        );
     }
 }

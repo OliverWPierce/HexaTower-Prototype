@@ -1,4 +1,5 @@
 mod execute_action_button;
+mod inventory;
 
 use bevy::prelude::*;
 
@@ -6,7 +7,9 @@ use crate::{
     backend::game_parameters::SetUpBoard,
     frontend::{
         cameras::{LEFT_PANEL_WIDTH, LOWER_PANEL_HEIGHT, RIGHT_PANEL_WIDTH},
-        in_game_ui::execute_action_button::ExecuteActionButtonPlugin,
+        in_game_ui::{
+            execute_action_button::ExecuteActionButtonPlugin, inventory::InventoryPlugin,
+        },
     },
 };
 
@@ -16,13 +19,13 @@ impl Plugin for InGameUI {
     fn build(&self, app: &mut App) {
         app.add_systems(SetUpBoard, create_panels);
 
-        app.add_plugins(ExecuteActionButtonPlugin);
+        app.add_plugins((ExecuteActionButtonPlugin, InventoryPlugin));
     }
 }
 
-const BACKGROUND_COLOR: Color = Color::srgb(0.057805, 0.068478, 0.093059);
-const BORDER_COLOR: Color = Color::srgb(0.032044, 0.038248, 0.047155);
-const BORDER_WIDTH: Val = Val::Percent(0.2);
+pub const BACKGROUND_COLOR: Color = Color::srgb(0.057805, 0.068478, 0.093059);
+pub const BORDER_COLOR: Color = Color::srgb(0.032044, 0.038248, 0.047155);
+pub const BORDER_WIDTH: Val = Val::Percent(0.2);
 
 #[derive(Debug, Resource)]
 pub struct LeftPanelEnt(Entity);
@@ -44,7 +47,8 @@ fn create_panels(mut commands: Commands) {
                 border: UiRect::top(BORDER_WIDTH).with_bottom(BORDER_WIDTH),
                 flex_grow: 0.0,
                 flex_shrink: 0.0,
-                justify_content: JustifyContent::SpaceEvenly,
+                align_content: AlignContent::Center,
+                justify_content: JustifyContent::Start,
                 ..default()
             },
             BackgroundColor(BACKGROUND_COLOR),
