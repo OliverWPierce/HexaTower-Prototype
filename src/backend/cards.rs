@@ -1,15 +1,12 @@
 use bevy::{
     asset::{AssetLoader, LoadedFolder},
     prelude::*,
-    transform::commands,
 };
 use rand::seq::{IndexedRandom, IteratorRandom};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::backend::{
-    BackEndSystems, cards, game_actions::ActionInfo, game_parameters::SetUpBoard,
-};
+use crate::backend::{BackEndSystems, game_actions::ActionInfo, game_parameters::SetUpBoard};
 
 #[derive(Debug, Asset, Reflect, Serialize, Deserialize, Clone)]
 pub struct CardAsset {
@@ -40,8 +37,8 @@ impl AssetLoader for CardAssetLoader {
     async fn load(
         &self,
         reader: &mut dyn bevy::asset::io::Reader,
-        settings: &Self::Settings,
-        load_context: &mut bevy::asset::LoadContext<'_>,
+        _settings: &Self::Settings,
+        _load_context: &mut bevy::asset::LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
@@ -66,7 +63,7 @@ impl Plugin for CardsPlugin {
         app.init_asset_loader::<CardAssetLoader>();
 
         app.add_systems(SetUpBoard, open_card_folder);
-        app.add_systems(Update, (validate_and_sort_newly_loaded_cards));
+        app.add_systems(Update, validate_and_sort_newly_loaded_cards);
         app.add_systems(Update, tmp_form_inventory.in_set(BackEndSystems));
     }
 }

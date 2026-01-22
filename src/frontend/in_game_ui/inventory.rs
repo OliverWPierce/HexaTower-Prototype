@@ -1,12 +1,12 @@
 use crate::{
     backend::{
         cards::{CardAsset, LogCard, TmpLogCardInventory},
+        game_actions::{ActiveElement, CurrentActiveElement},
         game_parameters::SetUpBoard,
     },
     frontend::{
         FrontEndSystems,
-        cameras::{LEFT_PANEL_WIDTH, LOWER_PANEL_HEIGHT, RIGHT_PANEL_WIDTH},
-        in_game_ui::{BACKGROUND_COLOR, BORDER_COLOR, LowerPanelEnt, create_panels},
+        in_game_ui::{LowerPanelEnt, create_panels},
     },
 };
 
@@ -19,6 +19,8 @@ impl Plugin for InventoryPlugin {
         app.add_systems(SetUpBoard, create_inventory_panel.after(create_panels));
 
         app.add_systems(Update, tmp_load_cards_into_ui.in_set(FrontEndSystems));
+
+        app.add_observer(make_cards_active);
     }
 }
 #[derive(Debug, Component)]
@@ -42,7 +44,6 @@ fn create_inventory_panel(mut commands: Commands, lower_panel: Res<LowerPanelEnt
             },
             BorderRadius::all(Val::Px(15.0)),
             BorderColor::all(Color::Srgba(tailwind::SLATE_800)),
-            BackgroundColor(BACKGROUND_COLOR),
         ))
         .id();
 
@@ -88,6 +89,9 @@ fn create_inventory_panel(mut commands: Commands, lower_panel: Res<LowerPanelEnt
     ));
 }
 
+#[derive(Debug, Component)]
+struct VisCardOf(Entity);
+
 fn tmp_load_cards_into_ui(
     log_inventory: Res<TmpLogCardInventory>,
     cards: Query<&LogCard>,
@@ -129,6 +133,28 @@ fn tmp_load_cards_into_ui(
                 image_mode: NodeImageMode::Auto,
                 ..Default::default()
             },
+            VisCardOf(*log_card),
         ));
+    }
+}
+
+fn make_cards_active(
+    click: On<Pointer<Click>>,
+    vis_cards: Query<&VisCardOf>,
+    log_inventory: Res<TmpLogCardInventory>,
+    mut active_element: ResMut<CurrentActiveElement>,
+) {
+    let Ok(log_card) = vis_cards.get(click.entity) else {
+        return;
+    };
+
+    if log_inventory.0.contains(&log_card.0) {
+        if let Some(ActiveElement::LogCard(current_log_card)) = active_element.0
+            && current_log_card == log_card.0
+        {
+            active_element.0 = None;
+        } else {
+            active_element.0 = Some(ActiveElement::LogCard(log_card.0))
+        }
     }
 }
