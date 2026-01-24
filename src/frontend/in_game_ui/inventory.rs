@@ -1,9 +1,5 @@
 use crate::{
-    backend::{
-        cards::{CardAsset, LogCard, TmpLogCardInventory},
-        game_actions::{ActiveElement, CurrentActiveElement},
-        game_parameters::SetUpBoard,
-    },
+    backend::{cards::CardAsset, game_parameters::SetUpBoard},
     frontend::{
         FrontEndSystems,
         in_game_ui::{LowerPanelEnt, create_panels},
@@ -18,9 +14,7 @@ impl Plugin for InventoryPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(SetUpBoard, create_inventory_panel.after(create_panels));
 
-        app.add_systems(Update, tmp_load_cards_into_ui.in_set(FrontEndSystems));
-
-        app.add_observer(make_cards_active);
+        // app.add_systems(Update, tmp_load_cards_into_ui.in_set(FrontEndSystems));
     }
 }
 #[derive(Debug, Component)]
@@ -89,72 +83,47 @@ fn create_inventory_panel(mut commands: Commands, lower_panel: Res<LowerPanelEnt
     ));
 }
 
-#[derive(Debug, Component)]
-struct VisCardOf(Entity);
+// fn tmp_load_cards_into_ui(
+//     log_inventory: Res<TmpLogCardInventory>,
+//     cards: Query<&LogCard>,
+//     card_assets: Res<Assets<CardAsset>>,
+//     asset_server: ResMut<AssetServer>,
+//     mut commands: Commands,
+//     panel: Single<Entity, With<CardHolderPanel>>,
+//     inputs: Res<ButtonInput<KeyCode>>,
+// ) {
+//     if !inputs.just_pressed(KeyCode::KeyR) {
+//         return;
+//     }
 
-fn tmp_load_cards_into_ui(
-    log_inventory: Res<TmpLogCardInventory>,
-    cards: Query<&LogCard>,
-    card_assets: Res<Assets<CardAsset>>,
-    asset_server: ResMut<AssetServer>,
-    mut commands: Commands,
-    panel: Single<Entity, With<CardHolderPanel>>,
-    inputs: Res<ButtonInput<KeyCode>>,
-) {
-    if !inputs.just_pressed(KeyCode::KeyR) {
-        return;
-    }
+//     commands.entity(panel.entity()).despawn_children();
 
-    commands.entity(panel.entity()).despawn_children();
+//     for log_card in log_inventory.0.iter() {
+//         let Ok(handle) = cards.get(*log_card) else {
+//             warn!("the logical inventory contained an entity that was not a logical card.");
+//             continue;
+//         };
 
-    for log_card in log_inventory.0.iter() {
-        let Ok(handle) = cards.get(*log_card) else {
-            warn!("the logical inventory contained an entity that was not a logical card.");
-            continue;
-        };
+//         let Some(card_data) = card_assets.get(handle.0.id()) else {
+//             warn!("A logical card's handle to the card asset failed to retrieve the asset.");
+//             continue;
+//         };
 
-        let Some(card_data) = card_assets.get(handle.0.id()) else {
-            warn!("A logical card's handle to the card asset failed to retrieve the asset.");
-            continue;
-        };
+//         println!("Added card {} to the visual inventory.", card_data.name);
 
-        println!("Added card {} to the visual inventory.", card_data.name);
-
-        commands.spawn((
-            ChildOf(panel.entity()),
-            Node {
-                aspect_ratio: Some(3.0 / 5.0),
-                height: Val::Percent(100.0),
-                ..default()
-            },
-            BorderRadius::all(Val::Px(5.0)),
-            ImageNode {
-                image: asset_server.load(card_data.image_path.clone()),
-                image_mode: NodeImageMode::Auto,
-                ..Default::default()
-            },
-            VisCardOf(*log_card),
-        ));
-    }
-}
-
-fn make_cards_active(
-    click: On<Pointer<Click>>,
-    vis_cards: Query<&VisCardOf>,
-    log_inventory: Res<TmpLogCardInventory>,
-    mut active_element: ResMut<CurrentActiveElement>,
-) {
-    let Ok(log_card) = vis_cards.get(click.entity) else {
-        return;
-    };
-
-    if log_inventory.0.contains(&log_card.0) {
-        if let Some(ActiveElement::LogCard(current_log_card)) = active_element.0
-            && current_log_card == log_card.0
-        {
-            active_element.0 = None;
-        } else {
-            active_element.0 = Some(ActiveElement::LogCard(log_card.0))
-        }
-    }
-}
+//         commands.spawn((
+//             ChildOf(panel.entity()),
+//             Node {
+//                 aspect_ratio: Some(3.0 / 5.0),
+//                 height: Val::Percent(100.0),
+//                 ..default()
+//             },
+//             BorderRadius::all(Val::Px(5.0)),
+//             ImageNode {
+//                 image: asset_server.load(card_data.image_path.clone()),
+//                 image_mode: NodeImageMode::Auto,
+//                 ..Default::default()
+//             },
+//         ));
+//     }
+// }

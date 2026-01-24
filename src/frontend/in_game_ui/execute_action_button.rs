@@ -1,8 +1,8 @@
 use crate::{
     backend::{
         game_actions::{
-            ActionOrSelectionChanged, CurrentAction, CurrentActiveElement, ExecuteActionRequest,
-            SelectionBounds, dangerous_selection_mechanics::SelectedLogTiles,
+            ActionOrSelectionChanged, CurrentAction, ExecuteActionRequest, SelectionBounds,
+            dangerous_selection_mechanics::SelectedLogTiles,
         },
         game_parameters::SetUpBoard,
     },
@@ -30,6 +30,12 @@ impl Plugin for ExecuteActionButtonPlugin {
 
 const NO_ACTION_BACKGROUND: Color = Color::Srgba(tailwind::SLATE_600);
 const NO_ACTION_BORDER: Color = Color::Srgba(tailwind::SLATE_800);
+
+const ACTION_READY_BACKGROUND: Color = Color::Srgba(tailwind::RED_600);
+const ACTION_READY_BORDER: Color = Color::Srgba(tailwind::RED_800);
+
+const ACTION_NOT_READY_BACKGROUND: Color = Color::Srgba(tailwind::RED_900);
+const ACTION_NOT_READY_BORDER: Color = Color::Srgba(tailwind::RED_950);
 
 #[derive(Debug, Component)]
 struct ExecuteActionButton;
@@ -61,80 +67,23 @@ fn update_button(
     action: Res<CurrentAction>,
     currently_selected: Res<SelectedLogTiles>,
     button: Single<(Entity, &mut BackgroundColor, &mut BorderColor), With<ExecuteActionButton>>,
-    action_soruce: Res<CurrentActiveElement>,
     mut commands: Commands,
 ) {
     if let Some(action) = action.0 {
         let (button_ent, mut background, mut border) = button.into_inner();
 
-        let display_action_name = match action_soruce.0 {
-            Some(source) => match source {
-                crate::backend::game_actions::ActiveElement::LogCard(_) => "Play Card",
-                crate::backend::game_actions::ActiveElement::LogPiece(_) => "Order",
-            },
-            None => "???",
-        };
-
-        let ready_background_color = match action_soruce.0 {
-            Some(source) => match source {
-                crate::backend::game_actions::ActiveElement::LogCard(_) => {
-                    Color::Srgba(tailwind::BLUE_600)
-                }
-                crate::backend::game_actions::ActiveElement::LogPiece(_) => {
-                    Color::Srgba(tailwind::RED_600)
-                }
-            },
-            None => Color::Srgba(tailwind::YELLOW_600),
-        };
-
-        let ready_border_color = match action_soruce.0 {
-            Some(source) => match source {
-                crate::backend::game_actions::ActiveElement::LogCard(_) => {
-                    Color::Srgba(tailwind::BLUE_800)
-                }
-                crate::backend::game_actions::ActiveElement::LogPiece(_) => {
-                    Color::Srgba(tailwind::RED_800)
-                }
-            },
-            None => Color::Srgba(tailwind::YELLOW_800),
-        };
-
-        let unready_background_color = match action_soruce.0 {
-            Some(source) => match source {
-                crate::backend::game_actions::ActiveElement::LogCard(_) => {
-                    Color::Srgba(tailwind::BLUE_900)
-                }
-                crate::backend::game_actions::ActiveElement::LogPiece(_) => {
-                    Color::Srgba(tailwind::RED_900)
-                }
-            },
-            None => Color::Srgba(tailwind::YELLOW_900),
-        };
-
-        let unready_border_color = match action_soruce.0 {
-            Some(source) => match source {
-                crate::backend::game_actions::ActiveElement::LogCard(_) => {
-                    Color::Srgba(tailwind::BLUE_950)
-                }
-                crate::backend::game_actions::ActiveElement::LogPiece(_) => {
-                    Color::Srgba(tailwind::RED_950)
-                }
-            },
-            None => Color::Srgba(tailwind::YELLOW_950),
-        };
-
         if currently_selected.as_read_only_list().len() < action.bounds().min_tiles {
-            *background = BackgroundColor(unready_background_color);
-            *border = BorderColor::all(unready_border_color);
+            *background = BackgroundColor(ACTION_NOT_READY_BACKGROUND);
+            *border = BorderColor::all(ACTION_NOT_READY_BORDER);
         } else {
-            *background = BackgroundColor(ready_background_color);
-            *border = BorderColor::all(ready_border_color);
+            *background = BackgroundColor(ACTION_READY_BACKGROUND);
+            *border = BorderColor::all(ACTION_READY_BORDER);
         }
 
         commands.entity(button_ent).despawn_children();
         commands.spawn((
             ChildOf(button_ent),
-            Text::new(display_action_name),
+            Text::new("ORDER"),
             TextLayout::new_with_justify(Justify::Center),
             TextFont {
                 font_size: 36.0,
@@ -182,8 +131,14 @@ fn send_execute_actions(
     click: On<Pointer<Click>>,
     mut commands: Commands,
     execute_button: Single<Entity, With<ExecuteActionButton>>,
+    action: Res<CurrentAction>,
+    currently_selected: Res<SelectedLogTiles>,
 ) {
-    if click.entity == execute_button.into_inner() {
+    if click.entity == execute_button.into_inner()
+        && let Some(action) = action.0
+        && currently_selected.as_read_only_list().len() <= action.bounds().max_tiles
+        && currently_selected.as_read_only_list().len() >= action.bounds().min_tiles
+    {
         commands.trigger(ExecuteActionRequest);
     }
 }

@@ -10,6 +10,7 @@ impl Plugin for GameLogic {
             PiecesPlugin,
             GameActionsPlugin,
             CardsPlugin,
+            PlayersPlugin,
         ));
     }
 }
@@ -21,10 +22,12 @@ pub mod cards;
 pub mod game_actions;
 pub mod game_parameters;
 pub mod pieces;
+pub mod players;
 pub mod tiles;
 
 pub use cards::CardsPlugin;
 pub use game_actions::GameActionsPlugin;
 pub use game_parameters::GameParametersPlugin;
 pub use pieces::PiecesPlugin;
+pub use players::PlayersPlugin;
 pub use tiles::TilesPlugin;

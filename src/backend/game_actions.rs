@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::backend::{
     BackEndSystems,
-    cards::{CardAsset, LogCard},
     game_actions::dangerous_selection_mechanics::{SelectedLogTiles, TileSelectionStatus},
     game_parameters::SetUpBoard,
     pieces::{OccupiedByPiece, SpawnLogPiece},
@@ -18,19 +17,11 @@ impl Plugin for GameActionsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CurrentAction>();
         app.init_resource::<SelectedLogTiles>();
-        app.init_resource::<CurrentActiveElement>();
 
         app.add_systems(
             Update,
             dangerous_selection_mechanics::handle_action_change
                 .run_if(resource_changed::<CurrentAction>)
-                .in_set(BackEndSystems),
-        );
-
-        app.add_systems(
-            Update,
-            handle_active_element_change
-                .run_if(resource_changed::<CurrentActiveElement>)
                 .in_set(BackEndSystems),
         );
 
@@ -49,10 +40,7 @@ impl Plugin for GameActionsPlugin {
                 .in_set(BackEndSystems),
         );
 
-        app.add_systems(
-            Update,
-            (insert_selection_data, tmp_test_unexpected_action_input).in_set(BackEndSystems),
-        );
+        app.add_systems(Update, insert_selection_data.in_set(BackEndSystems));
 
         app.add_observer(validate_execution_request);
     }
@@ -153,44 +141,6 @@ impl SelectionBounds for EligibilityDeterminationMethod {
 
 #[derive(Debug, Resource, PartialEq, Eq, Default)]
 pub struct CurrentAction(pub Option<ActionInfo>);
-
-#[derive(Debug, Clone, Copy)]
-pub enum ActiveElement {
-    LogCard(Entity),
-    LogPiece(Entity),
-}
-
-#[derive(Debug, Resource, Clone, Copy, Default)]
-pub struct CurrentActiveElement(pub Option<ActiveElement>);
-
-fn handle_active_element_change(
-    active_element: Res<CurrentActiveElement>,
-    mut current_action: ResMut<CurrentAction>,
-    log_cards: Query<&LogCard>,
-    card_actions: Res<Assets<CardAsset>>,
-) {
-    let Some(element) = active_element.0 else {
-        current_action.0 = None;
-        return;
-    };
-
-    match element {
-        ActiveElement::LogCard(log_card) => {
-            let Ok(card_handle) = log_cards.get(log_card) else {
-                error!("The active card entity did not have a log_card component");
-                return;
-            };
-
-            let Some(card_data) = card_actions.get(card_handle.0.id()) else {
-                error!("The card handle did not point to a living asset");
-                return;
-            };
-
-            current_action.0 = Some(card_data.action);
-        }
-        ActiveElement::LogPiece(entity) => todo!(),
-    }
-}
 
 #[derive(Debug, ScheduleLabel, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ExecuteSelectedAction;
@@ -420,7 +370,7 @@ pub mod dangerous_selection_mechanics {
 pub struct ExecuteActionRequest;
 
 fn validate_execution_request(
-    request: On<ExecuteActionRequest>,
+    _request: On<ExecuteActionRequest>,
     mut commands: Commands,
     action: Res<CurrentAction>,
     selected_tiles: Res<SelectedLogTiles>,
@@ -433,22 +383,5 @@ fn validate_execution_request(
         && amount_selected <= action_info.functionality.bounds().max_tiles
     {
         commands.run_schedule(ExecuteSelectedAction);
-    }
-}
-
-fn tmp_test_unexpected_action_input(
-    inputs: Res<ButtonInput<KeyCode>>,
-    mut action: ResMut<CurrentAction>,
-) {
-    if inputs.just_pressed(KeyCode::Space) {
-        action.0 = Some(ActionInfo {
-            functionality: crate::backend::game_actions::ActionFunctionality::DeleteTile,
-            eligibility_method:
-                crate::backend::game_actions::EligibilityDeterminationMethod::AllTiles,
-            selection_count_bounds: GameDesignBounds(Bounds {
-                min_tiles: 1,
-                max_tiles: usize::MAX,
-            }),
-        });
     }
 }
