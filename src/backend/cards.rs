@@ -2,14 +2,18 @@ use bevy::{
     asset::{AssetLoader, LoadedFolder},
     prelude::*,
 };
+use rand::seq::IndexedRandom;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::backend::{
-    BackEndSystems,
-    game_actions::ActionInfo,
-    game_parameters::SetUpBoard,
-    players::{PlayerMarker, create_basic_players},
+use crate::{
+    backend::{
+        BackEndSystems,
+        game_actions::ActionInfo,
+        game_parameters::SetUpBoard,
+        players::{ActivePlayer, PlayerMarker, create_basic_players},
+    },
+    frontend::FrontEndSystems,
 };
 
 #[derive(Debug, Asset, Reflect, Serialize, Deserialize, Clone)]
@@ -73,6 +77,9 @@ impl Plugin for CardsPlugin {
                 .after(create_basic_players),
         );
         app.add_systems(Update, validate_and_sort_newly_loaded_cards);
+
+        //temporary testing systems
+        app.add_systems(Update, tmp_add_card_to_inventory.in_set(FrontEndSystems));
     }
 }
 
@@ -119,9 +126,20 @@ fn validate_and_sort_newly_loaded_cards(
     }
 }
 #[derive(Debug, Component)]
-struct PlayerCardInventory {
-    max_size: usize,
-    cards: Vec<Handle<CardAsset>>,
+pub struct PlayerCardInventory {
+    pub max_size: usize,
+    pub cards: Vec<Handle<CardAsset>>,
+}
+
+impl PlayerCardInventory {
+    pub fn add_card_succeeds(&mut self, card: Handle<CardAsset>) -> bool {
+        if self.cards.len() < self.max_size {
+            self.cards.push(card);
+            true
+        } else {
+            false
+        }
+    }
 }
 
 fn initialize_player_inventories(
@@ -137,5 +155,39 @@ fn initialize_player_inventories(
             max_size: 5,
             cards: vec![tower_spawn_card_handle.clone()],
         });
+    }
+}
+#[derive(Debug, Event)]
+pub struct ReRenderInventory;
+
+/// Later, simply change how this system is triggered.
+fn tmp_add_card_to_inventory(
+    inputs: Res<ButtonInput<KeyCode>>,
+    all_cards: Res<CardHandles>,
+    player: Res<ActivePlayer>,
+    mut inventories: Query<&mut PlayerCardInventory>,
+    mut commands: Commands,
+) {
+    if !inputs.just_pressed(KeyCode::KeyA) {
+        return;
+    }
+
+    let Ok(mut inventory) = inventories.get_mut(player.0) else {
+        error!("The active player had no inventory.");
+        return;
+    };
+
+    let mut rng = rand::rng();
+
+    if inventory.add_card_succeeds(
+        all_cards
+            .0
+            .choose(&mut rng)
+            .expect("There were no cards to choose from")
+            .clone(),
+    ) {
+        commands.trigger(ReRenderInventory);
+    } else {
+        info!("The players inventory was full, so the card was not added.");
     }
 }

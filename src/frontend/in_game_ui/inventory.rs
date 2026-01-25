@@ -1,9 +1,11 @@
 use crate::{
-    backend::{cards::CardAsset, game_parameters::SetUpBoard},
-    frontend::{
-        FrontEndSystems,
-        in_game_ui::{LowerPanelEnt, create_panels},
+    backend::{
+        cards::{CardAsset, PlayerCardInventory, ReRenderInventory},
+        game_actions::CurrentAction,
+        game_parameters::SetUpBoard,
+        players::ActivePlayer,
     },
+    frontend::in_game_ui::{LowerPanelEnt, create_panels},
 };
 
 use bevy::{color::palettes::tailwind, prelude::*};
@@ -14,7 +16,8 @@ impl Plugin for InventoryPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(SetUpBoard, create_inventory_panel.after(create_panels));
 
-        // app.add_systems(Update, tmp_load_cards_into_ui.in_set(FrontEndSystems));
+        app.add_observer(load_cards_into_ui);
+        app.add_observer(tmp_load_card_action);
     }
 }
 #[derive(Debug, Component)]
@@ -83,47 +86,76 @@ fn create_inventory_panel(mut commands: Commands, lower_panel: Res<LowerPanelEnt
     ));
 }
 
-// fn tmp_load_cards_into_ui(
-//     log_inventory: Res<TmpLogCardInventory>,
-//     cards: Query<&LogCard>,
-//     card_assets: Res<Assets<CardAsset>>,
-//     asset_server: ResMut<AssetServer>,
-//     mut commands: Commands,
-//     panel: Single<Entity, With<CardHolderPanel>>,
-//     inputs: Res<ButtonInput<KeyCode>>,
-// ) {
-//     if !inputs.just_pressed(KeyCode::KeyR) {
-//         return;
-//     }
+#[derive(Debug, Component)]
+struct CorrespondingInventoryIndex(usize);
 
-//     commands.entity(panel.entity()).despawn_children();
+/// Note that an observer is used to prevent invalid data from being rendered during an inbetween frame.
+fn load_cards_into_ui(
+    _trigger: On<ReRenderInventory>,
+    active_player: Res<ActivePlayer>,
+    inventories: Query<&PlayerCardInventory>,
+    card_assets: Res<Assets<CardAsset>>,
+    asset_server: ResMut<AssetServer>,
+    mut commands: Commands,
+    panel: Single<Entity, With<CardHolderPanel>>,
+) {
+    commands.entity(panel.entity()).despawn_children();
 
-//     for log_card in log_inventory.0.iter() {
-//         let Ok(handle) = cards.get(*log_card) else {
-//             warn!("the logical inventory contained an entity that was not a logical card.");
-//             continue;
-//         };
+    let Ok(log_inventory) = inventories.get(active_player.0) else {
+        error!("The player had no inventory");
+        return;
+    };
 
-//         let Some(card_data) = card_assets.get(handle.0.id()) else {
-//             warn!("A logical card's handle to the card asset failed to retrieve the asset.");
-//             continue;
-//         };
+    for (index, handle) in log_inventory.cards.iter().enumerate() {
+        let Some(card_data) = card_assets.get(handle.id()) else {
+            warn!("A handle to the card asset failed to retrieve the asset.");
+            continue;
+        };
 
-//         println!("Added card {} to the visual inventory.", card_data.name);
+        commands.spawn((
+            ChildOf(panel.entity()),
+            CorrespondingInventoryIndex(index),
+            Node {
+                aspect_ratio: Some(3.0 / 5.0),
+                height: Val::Percent(100.0),
+                ..default()
+            },
+            BorderRadius::all(Val::Px(5.0)),
+            ImageNode {
+                image: asset_server.load(card_data.image_path.clone()),
+                image_mode: NodeImageMode::Auto,
+                ..Default::default()
+            },
+        ));
+    }
+}
 
-//         commands.spawn((
-//             ChildOf(panel.entity()),
-//             Node {
-//                 aspect_ratio: Some(3.0 / 5.0),
-//                 height: Val::Percent(100.0),
-//                 ..default()
-//             },
-//             BorderRadius::all(Val::Px(5.0)),
-//             ImageNode {
-//                 image: asset_server.load(card_data.image_path.clone()),
-//                 image_mode: NodeImageMode::Auto,
-//                 ..Default::default()
-//             },
-//         ));
-//     }
-// }
+fn tmp_load_card_action(
+    click: On<Pointer<Click>>,
+    vis_cards: Query<&CorrespondingInventoryIndex>,
+    active_player: Res<ActivePlayer>,
+    inventories: Query<&PlayerCardInventory>,
+    mut action: ResMut<CurrentAction>,
+    card_assets: Res<Assets<CardAsset>>,
+) {
+    let Ok(CorrespondingInventoryIndex(index)) = vis_cards.get(click.entity) else {
+        return;
+    };
+
+    let Ok(log_inventory) = inventories.get(active_player.0) else {
+        error!("The player had no inventory");
+        return;
+    };
+
+    let Some(card_handle) = log_inventory.cards.get(*index) else {
+        error!("A vis card pointed to an index that was out of the inventory's bounds");
+        return;
+    };
+
+    let Some(card_data) = card_assets.get(card_handle.id()) else {
+        warn!("A handle to the card asset failed to retrieve the asset.");
+        return;
+    };
+
+    action.0 = Some(card_data.action);
+}

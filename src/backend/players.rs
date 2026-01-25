@@ -19,7 +19,7 @@ pub struct PlayerCreationInstructions {
 pub struct PlayersToCreate(pub Vec<PlayerCreationInstructions>);
 
 #[derive(Debug, Resource)]
-pub struct ActivePlayer(Entity);
+pub struct ActivePlayer(pub Entity);
 
 pub fn create_basic_players(qued_players: Res<PlayersToCreate>, mut commands: Commands) {
     let mut players_created = Vec::new();
