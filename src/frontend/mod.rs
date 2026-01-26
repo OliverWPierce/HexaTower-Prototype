@@ -24,6 +24,8 @@ impl Plugin for InputAndGraphics {
         );
 
         app.configure_sets(SetUpBoard, (BackEndSystems, FrontEndSystems).chain());
+
+        app.configure_sets(StartTurn, (BackEndSystems, FrontEndSystems).chain());
     }
 }
 
@@ -50,4 +52,5 @@ use crate::backend::{
     BackEndSystems,
     game_actions::{ActionOrSelectionChanged, ExecuteSelectedAction},
     game_parameters::SetUpBoard,
+    players::StartTurn,
 };

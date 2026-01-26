@@ -1,9 +1,9 @@
 use crate::{
     backend::{
-        cards::{CardAsset, PlayerCardInventory, ReRenderInventory},
+        cards::{CardAsset, InventoryUpdated, PlayerCardInventory},
         game_actions::CurrentAction,
         game_parameters::SetUpBoard,
-        players::ActivePlayer,
+        players::{ActivePlayer, StartTurn},
     },
     frontend::in_game_ui::{LowerPanelEnt, create_panels},
 };
@@ -16,7 +16,9 @@ impl Plugin for InventoryPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(SetUpBoard, create_inventory_panel.after(create_panels));
 
-        app.add_observer(load_cards_into_ui);
+        app.add_systems(InventoryUpdated, load_cards_into_ui);
+        app.add_systems(StartTurn, load_cards_into_ui);
+
         app.add_observer(tmp_load_card_action);
     }
 }
@@ -62,7 +64,6 @@ fn create_inventory_panel(mut commands: Commands, lower_panel: Res<LowerPanelEnt
                 }
             ),
             (
-                Text::from("0 / 8 cards"),
                 TextFont {
                     font_size: 16.0,
                     ..default()
@@ -89,22 +90,31 @@ fn create_inventory_panel(mut commands: Commands, lower_panel: Res<LowerPanelEnt
 #[derive(Debug, Component)]
 struct CorrespondingInventoryIndex(usize);
 
-/// Note that an observer is used to prevent invalid data from being rendered during an inbetween frame.
 fn load_cards_into_ui(
-    _trigger: On<ReRenderInventory>,
     active_player: Res<ActivePlayer>,
     inventories: Query<&PlayerCardInventory>,
     card_assets: Res<Assets<CardAsset>>,
     asset_server: ResMut<AssetServer>,
     mut commands: Commands,
-    panel: Single<Entity, With<CardHolderPanel>>,
+    card_parent_panel: Single<Entity, With<CardHolderPanel>>,
+    info_panel: Single<Entity, With<InventoryInfoNode>>,
 ) {
-    commands.entity(panel.entity()).despawn_children();
+    commands
+        .entity(card_parent_panel.entity())
+        .despawn_children();
 
     let Ok(log_inventory) = inventories.get(active_player.0) else {
         error!("The player had no inventory");
         return;
     };
+
+    commands
+        .entity(info_panel.entity())
+        .insert(Text::from(format!(
+            "{} / {} cards",
+            log_inventory.cards.len(),
+            log_inventory.max_size,
+        )));
 
     for (index, handle) in log_inventory.cards.iter().enumerate() {
         let Some(card_data) = card_assets.get(handle.id()) else {
@@ -113,19 +123,31 @@ fn load_cards_into_ui(
         };
 
         commands.spawn((
-            ChildOf(panel.entity()),
+            ChildOf(card_parent_panel.entity()),
             CorrespondingInventoryIndex(index),
             Node {
                 aspect_ratio: Some(3.0 / 5.0),
                 height: Val::Percent(100.0),
+                border: UiRect::all(Val::Px(3.0)),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
                 ..default()
             },
             BorderRadius::all(Val::Px(5.0)),
-            ImageNode {
-                image: asset_server.load(card_data.image_path.clone()),
-                image_mode: NodeImageMode::Auto,
-                ..Default::default()
-            },
+            BorderColor::all(Color::WHITE),
+            children![(
+                ImageNode {
+                    image: asset_server.load(card_data.image_path.clone()),
+                    image_mode: NodeImageMode::Auto,
+                    ..Default::default()
+                },
+                BorderRadius::all(Val::Px(5.0)),
+                Node {
+                    aspect_ratio: Some(3.0 / 5.0),
+                    max_height: Val::Percent(100.0),
+                    ..default()
+                }
+            )],
         ));
     }
 }

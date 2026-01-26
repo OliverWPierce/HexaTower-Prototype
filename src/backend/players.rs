@@ -1,4 +1,5 @@
 use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
+use rand::{rng, seq::IteratorRandom};
 
 use crate::backend::{BackEndSystems, game_parameters::SetUpBoard};
 
@@ -7,6 +8,7 @@ pub struct PlayersPlugin;
 impl Plugin for PlayersPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(SetUpBoard, create_basic_players.in_set(BackEndSystems));
+        app.add_systems(Update, tmp_switch_player.in_set(BackEndSystems));
     }
 }
 
@@ -46,9 +48,24 @@ pub struct DisplayName(String);
 pub struct PlayerMarker;
 
 #[derive(Debug, ScheduleLabel, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-struct StartTurn;
+pub struct StartTurn;
 
-// fn tmp_end_finish_turn:
+fn tmp_switch_player(
+    inputs: Res<ButtonInput<KeyCode>>,
+    mut commands: Commands,
+    players: Query<(Entity, &DisplayName)>,
+    mut active: ResMut<ActivePlayer>,
+) {
+    if !inputs.just_pressed(KeyCode::KeyS) {
+        return;
+    }
 
-// #[derive(Debug, ScheduleLabel, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-// struct StartTurn;
+    let mut rng = rng();
+    let player = players.iter().choose(&mut rng).expect("No players existed");
+
+    active.0 = player.0;
+
+    println!("Made {} the active player", player.1.0);
+
+    commands.run_schedule(StartTurn);
+}

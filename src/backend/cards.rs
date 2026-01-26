@@ -1,5 +1,6 @@
 use bevy::{
     asset::{AssetLoader, LoadedFolder},
+    ecs::schedule::ScheduleLabel,
     prelude::*,
 };
 use rand::seq::IndexedRandom;
@@ -157,8 +158,8 @@ fn initialize_player_inventories(
         });
     }
 }
-#[derive(Debug, Event)]
-pub struct ReRenderInventory;
+#[derive(Debug, ScheduleLabel, Hash, Eq, PartialEq, PartialOrd, Ord, Clone, Copy)]
+pub struct InventoryUpdated;
 
 /// Later, simply change how this system is triggered.
 fn tmp_add_card_to_inventory(
@@ -186,7 +187,7 @@ fn tmp_add_card_to_inventory(
             .expect("There were no cards to choose from")
             .clone(),
     ) {
-        commands.trigger(ReRenderInventory);
+        commands.run_schedule(InventoryUpdated);
     } else {
         info!("The players inventory was full, so the card was not added.");
     }

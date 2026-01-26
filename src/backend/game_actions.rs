@@ -6,6 +6,7 @@ use crate::backend::{
     game_actions::dangerous_selection_mechanics::{SelectedLogTiles, TileSelectionStatus},
     game_parameters::SetUpBoard,
     pieces::{OccupiedByPiece, SpawnLogPiece},
+    players::StartTurn,
     tiles::{
         AdjacentTiles, DeleteLogTileRequest, EssentialTileCreationSystems, LogicalTileCreated,
     },
@@ -43,6 +44,9 @@ impl Plugin for GameActionsPlugin {
         app.add_systems(Update, insert_selection_data.in_set(BackEndSystems));
 
         app.add_observer(validate_execution_request);
+
+        // Change this to trigger on the end of a player's input stage of their turn
+        app.add_systems(StartTurn, clear_action);
     }
 }
 
@@ -384,4 +388,8 @@ fn validate_execution_request(
     {
         commands.run_schedule(ExecuteSelectedAction);
     }
+}
+
+fn clear_action(mut action: ResMut<CurrentAction>) {
+    action.0 = None;
 }
