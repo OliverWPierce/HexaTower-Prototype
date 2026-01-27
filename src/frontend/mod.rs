@@ -26,6 +26,16 @@ impl Plugin for InputAndGraphics {
         app.configure_sets(SetUpBoard, (BackEndSystems, FrontEndSystems).chain());
 
         app.configure_sets(StartTurn, (BackEndSystems, FrontEndSystems).chain());
+
+        app.configure_sets(
+            ExecuteSelectedAction,
+            (BackEndSystems, FrontEndSystems, ClearBackendDataSystems).chain(),
+        );
+
+        app.configure_sets(
+            ActionOrSelectionChanged,
+            (BackEndSystems, FrontEndSystems).chain(),
+        );
     }
 }
 
@@ -50,7 +60,7 @@ pub use visual_tiles::VisTilesPlugin;
 
 use crate::backend::{
     BackEndSystems,
-    game_actions::{ActionOrSelectionChanged, ExecuteSelectedAction},
+    game_actions::{ActionOrSelectionChanged, ClearBackendDataSystems, ExecuteSelectedAction},
     game_parameters::SetUpBoard,
     players::StartTurn,
 };

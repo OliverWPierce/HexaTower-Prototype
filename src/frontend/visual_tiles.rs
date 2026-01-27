@@ -12,8 +12,10 @@ pub struct VisTilesPlugin;
 
 impl Plugin for VisTilesPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, create_vis_tiles_if_needed);
-        app.add_systems(SetUpBoard, initialize_handles);
+        app.add_systems(
+            SetUpBoard,
+            (initialize_handles, create_vis_tiles_if_needed).chain(),
+        );
 
         app.add_systems(
             Update,

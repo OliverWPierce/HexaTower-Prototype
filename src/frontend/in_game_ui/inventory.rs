@@ -1,7 +1,7 @@
 use crate::{
     backend::{
         cards::{CardAsset, InventoryUpdated, PlayerCardInventory},
-        game_actions::CurrentAction,
+        game_actions::{ActionOrSelectionChanged, ActionSource, CurrentSource, SetActionTo},
         game_parameters::SetUpBoard,
         players::{ActivePlayer, StartTurn},
     },
@@ -16,8 +16,12 @@ impl Plugin for InventoryPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(SetUpBoard, create_inventory_panel.after(create_panels));
 
-        app.add_systems(InventoryUpdated, load_cards_into_ui);
-        app.add_systems(StartTurn, load_cards_into_ui);
+        app.add_systems(
+            InventoryUpdated,
+            (load_cards_into_ui, update_selection).chain(),
+        );
+        app.add_systems(StartTurn, (load_cards_into_ui, update_selection).chain());
+        app.add_systems(ActionOrSelectionChanged, update_selection);
 
         app.add_observer(tmp_load_card_action);
     }
@@ -134,7 +138,7 @@ fn load_cards_into_ui(
                 ..default()
             },
             BorderRadius::all(Val::Px(5.0)),
-            BorderColor::all(Color::WHITE),
+            BorderColor::all(Color::Srgba(tailwind::SLATE_700)),
             children![(
                 ImageNode {
                     image: asset_server.load(card_data.image_path.clone()),
@@ -157,8 +161,9 @@ fn tmp_load_card_action(
     vis_cards: Query<&CorrespondingInventoryIndex>,
     active_player: Res<ActivePlayer>,
     inventories: Query<&PlayerCardInventory>,
-    mut action: ResMut<CurrentAction>,
     card_assets: Res<Assets<CardAsset>>,
+    source: Res<CurrentSource>,
+    mut commands: Commands,
 ) {
     let Ok(CorrespondingInventoryIndex(index)) = vis_cards.get(click.entity) else {
         return;
@@ -179,5 +184,45 @@ fn tmp_load_card_action(
         return;
     };
 
-    action.0 = Some(card_data.action);
+    if let Some(ActionSource::Card { inventory_index }) = source.0
+        && inventory_index == *index
+    {
+        commands.trigger(SetActionTo::None);
+    } else {
+        commands.trigger(SetActionTo::Action {
+            action: card_data.action,
+            source: ActionSource::Card {
+                inventory_index: *index,
+            },
+        });
+    }
+}
+
+fn update_selection(
+    current_source: Res<CurrentSource>,
+    mut vis_inventory_cards: Query<(&CorrespondingInventoryIndex, &mut BorderColor)>,
+) {
+    let Some(source) = current_source.0 else {
+        for (_, mut color) in vis_inventory_cards.iter_mut() {
+            color.set_all(Color::Srgba(tailwind::SLATE_700));
+        }
+        return;
+    };
+
+    match source {
+        ActionSource::Card { inventory_index } => {
+            for (vis_represents_index, mut color) in vis_inventory_cards.iter_mut() {
+                if inventory_index == vis_represents_index.0 {
+                    color.set_all(Color::WHITE);
+                } else {
+                    color.set_all(Color::Srgba(tailwind::SLATE_700));
+                }
+            }
+        }
+        _ => {
+            for (_, mut color) in vis_inventory_cards.iter_mut() {
+                color.set_all(Color::Srgba(tailwind::SLATE_700));
+            }
+        }
+    }
 }

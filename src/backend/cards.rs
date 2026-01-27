@@ -10,12 +10,14 @@ use thiserror::Error;
 use crate::{
     backend::{
         BackEndSystems,
-        game_actions::ActionInfo,
+        game_actions::{ActionInfo, CurrentSource, ExecuteSelectedAction},
         game_parameters::SetUpBoard,
         players::{ActivePlayer, PlayerMarker, create_basic_players},
     },
     frontend::FrontEndSystems,
 };
+
+use super::game_actions::ActionSource;
 
 #[derive(Debug, Asset, Reflect, Serialize, Deserialize, Clone)]
 pub struct CardAsset {
@@ -81,6 +83,8 @@ impl Plugin for CardsPlugin {
 
         //temporary testing systems
         app.add_systems(Update, tmp_add_card_to_inventory.in_set(FrontEndSystems));
+
+        app.add_systems(ExecuteSelectedAction, consume_card.in_set(BackEndSystems));
     }
 }
 
@@ -191,4 +195,38 @@ fn tmp_add_card_to_inventory(
     } else {
         info!("The players inventory was full, so the card was not added.");
     }
+}
+
+fn consume_card(
+    player: Res<ActivePlayer>,
+    mut inventories: Query<&mut PlayerCardInventory>,
+    action_source: Res<CurrentSource>,
+    mut commands: Commands,
+) {
+    let Some(source) = action_source.0 else {
+        warn!(
+            "There was no action source when deciding whether to consume a card after action execution."
+        );
+        return;
+    };
+
+    let inventory_index = match source {
+        ActionSource::Card { inventory_index } => inventory_index,
+        _ => return,
+    };
+
+    let Ok(mut inventory) = inventories.get_mut(player.0) else {
+        error!("The active player had no inventory.");
+        return;
+    };
+
+    if inventory_index > inventory.cards.len() {
+        error!(
+            "The inventory index listed as sourcing the game action was out of bounds of the inventory length."
+        );
+        return;
+    }
+
+    inventory.cards.remove(inventory_index);
+    commands.run_schedule(InventoryUpdated);
 }

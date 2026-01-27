@@ -11,24 +11,24 @@ use crate::backend::{
         AdjacentTiles, DeleteLogTileRequest, EssentialTileCreationSystems, LogicalTileCreated,
     },
 };
-
+/// Note that it is highly important that nothing about the backend changes between when an action is loaded and when it
+/// is finished being executed or canceled. This could mess up "magic indexes" and other things. If something must change, make sure it calls all the needed schedules to update the backend.
 pub struct GameActionsPlugin;
 
 impl Plugin for GameActionsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CurrentAction>();
         app.init_resource::<SelectedLogTiles>();
+        app.init_resource::<CurrentSource>();
 
-        app.add_systems(
-            Update,
-            dangerous_selection_mechanics::handle_action_change
-                .run_if(resource_changed::<CurrentAction>)
-                .in_set(BackEndSystems),
-        );
+        app.add_observer(dangerous_selection_mechanics::handle_action_change);
 
         app.add_observer(dangerous_selection_mechanics::select_tile);
 
-        app.add_systems(ExecuteSelectedAction, execute_action.in_set(BackEndSystems));
+        app.add_systems(
+            ExecuteSelectedAction,
+            execute_action_functionality.in_set(BackEndSystems),
+        );
 
         app.add_systems(
             ActionOrSelectionChanged,
@@ -41,14 +41,22 @@ impl Plugin for GameActionsPlugin {
                 .in_set(BackEndSystems),
         );
 
+        app.add_systems(
+            ExecuteSelectedAction,
+            clear_action_related_data.in_set(ClearBackendDataSystems),
+        );
+
+        app.add_systems(StartTurn, clear_action_related_data.in_set(BackEndSystems));
+
         app.add_systems(Update, insert_selection_data.in_set(BackEndSystems));
 
         app.add_observer(validate_execution_request);
-
-        // Change this to trigger on the end of a player's input stage of their turn
-        app.add_systems(StartTurn, clear_action);
     }
 }
+
+/// This set is used to tell a system to run only after front end systems run. It ensures the backend doesn't delete data before the front end gets to look at it.
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ClearBackendDataSystems;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect, Serialize, Deserialize)]
 pub enum ActionFunctionality {
@@ -70,6 +78,23 @@ pub struct ActionInfo {
     functionality: ActionFunctionality,
     eligibility_method: EligibilityDeterminationMethod,
     selection_count_bounds: GameDesignBounds,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ActionSource {
+    Card { inventory_index: usize },
+    Neither,
+}
+
+#[derive(Debug, Resource, Default)]
+pub struct CurrentSource(pub Option<ActionSource>);
+
+#[derive(Debug, Event)]
+pub enum SetActionTo {
+    None,
+    Action {
+        action: ActionInfo,
+        source: ActionSource,
+    },
 }
 
 impl ActionInfo {
@@ -155,8 +180,8 @@ fn insert_selection_data(mut new_tiles: MessageReader<LogicalTileCreated>, mut c
     }
 }
 
-fn execute_action(
-    mut action: ResMut<CurrentAction>,
+fn execute_action_functionality(
+    action: Res<CurrentAction>,
     selected_tiles: Res<SelectedLogTiles>,
     mut deletions: MessageWriter<DeleteLogTileRequest>,
     mut piece_spawns: MessageWriter<SpawnLogPiece>,
@@ -189,7 +214,10 @@ fn execute_action(
             });
         }
     }
-    action.0 = None;
+}
+
+fn clear_action_related_data(mut commands: Commands) {
+    commands.trigger(SetActionTo::None);
 }
 
 fn evaluate_tiles(
@@ -289,7 +317,9 @@ pub struct ActionOrSelectionChanged;
 /// Essentially, it ensures that once a tile is selected, it cannot be deselected unless the selection process resets. Also,
 /// the only way to select a tile is through a special event.
 pub mod dangerous_selection_mechanics {
-    use crate::backend::game_actions::ActionOrSelectionChanged;
+    use crate::backend::game_actions::{
+        ActionOrSelectionChanged, CurrentAction, CurrentSource, SetActionTo,
+    };
     use bevy::prelude::*;
 
     #[derive(Debug, Default, Resource)]
@@ -338,10 +368,24 @@ pub mod dangerous_selection_mechanics {
     }
 
     pub fn handle_action_change(
+        instructions: On<SetActionTo>,
+        mut current_action: ResMut<CurrentAction>,
+        mut current_source: ResMut<CurrentSource>,
         mut selection_list: ResMut<SelectedLogTiles>,
         mut log_tiles: Query<&mut TileSelectionStatus>,
         mut commands: Commands,
     ) {
+        match *instructions {
+            SetActionTo::None => {
+                current_action.0 = None;
+                current_source.0 = None;
+            }
+            SetActionTo::Action { action, source } => {
+                current_action.0 = Some(action);
+                current_source.0 = Some(source);
+            }
+        }
+
         selection_list.0.clear();
         for mut tile_state in log_tiles.iter_mut() {
             tile_state.0 = SelectionState::Neither;
@@ -388,8 +432,4 @@ fn validate_execution_request(
     {
         commands.run_schedule(ExecuteSelectedAction);
     }
-}
-
-fn clear_action(mut action: ResMut<CurrentAction>) {
-    action.0 = None;
 }
