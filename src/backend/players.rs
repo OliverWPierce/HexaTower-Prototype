@@ -33,12 +33,24 @@ pub fn create_basic_players(qued_players: Res<PlayersToCreate>, mut commands: Co
 
         players_created.push(new_player);
     }
-    commands.remove_resource::<PlayersToCreate>();
+
     commands.insert_resource(ActivePlayer(
         *players_created
             .first()
             .expect("There were no players to create"),
     ));
+
+    for (index, player) in players_created.iter().enumerate() {
+        commands.entity(*player).insert(PlayerTurnOrder {
+            next_player: *players_created.get(index + 1).unwrap_or(
+                players_created
+                    .first()
+                    .expect("There were no players created."),
+            ),
+        });
+    }
+
+    commands.remove_resource::<PlayersToCreate>();
 }
 
 #[derive(Debug, Component)]
@@ -47,25 +59,32 @@ pub struct DisplayName(String);
 #[derive(Debug, Component)]
 pub struct PlayerMarker;
 
+#[derive(Debug, Component)]
+struct PlayerTurnOrder {
+    next_player: Entity,
+}
+
 #[derive(Debug, ScheduleLabel, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct StartTurn;
 
 fn tmp_switch_player(
     inputs: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
-    players: Query<(Entity, &DisplayName)>,
+    players: Query<(&PlayerTurnOrder, &DisplayName)>,
     mut active: ResMut<ActivePlayer>,
 ) {
     if !inputs.just_pressed(KeyCode::KeyS) {
         return;
     }
 
-    let mut rng = rng();
-    let player = players.iter().choose(&mut rng).expect("No players existed");
+    let Ok((next, name)) = players.get(active.0) else {
+        error!("The entity listed as the current player was not a player.");
+        return;
+    };
 
-    active.0 = player.0;
+    active.0 = next.next_player;
 
-    println!("Made {} the active player", player.1.0);
+    println!("Made {} the active player", name.0);
 
     commands.run_schedule(StartTurn);
 }
