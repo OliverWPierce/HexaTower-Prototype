@@ -1,5 +1,4 @@
 use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
-use rand::{rng, seq::IteratorRandom};
 
 use crate::backend::{BackEndSystems, game_parameters::SetUpBoard};
 

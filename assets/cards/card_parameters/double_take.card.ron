@@ -1,9 +1,11 @@
 CardAsset (
     name: "Double take",
+    price: 5,
     action: ActionInfo (
         functionality: DoubleTakeTest,
         eligibility_method: UnoccupiedTiles,
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 2, max_tiles: 2)),
         ),
     image_path: "cards/card_images/BlueUpgrade.png",
+    rarity: Epic,
 )

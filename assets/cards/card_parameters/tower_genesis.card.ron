@@ -1,9 +1,11 @@
 CardAsset (
     name: "Tower Genesis",
+    price: 2,
     action: ActionInfo (
         functionality: SpawnTower,
         eligibility_method: UnoccupiedTiles,
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 0, max_tiles: 99)),
         ),
     image_path: "cards/card_images/GoldSpawn.png",
+    rarity: Common,
 )

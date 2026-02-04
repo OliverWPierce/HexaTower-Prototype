@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::backend::players::{PlayerCreationInstructions, PlayersToCreate};
+use crate::backend::players::{PlayerCreationInstructions, PlayersToCreate, StartTurn};
 
 pub struct StartupEvents;
 
@@ -12,7 +12,7 @@ impl Plugin for StartupEvents {
 
 fn send_game_setup_instructions(mut commands: Commands) {
     commands.trigger(crate::backend::game_parameters::CreateGame {
-        board_size: crate::backend::game_parameters::BoardSize::ExtraLarge,
+        board_size: crate::backend::game_parameters::BoardSize::Large,
         player_instructions: PlayersToCreate(vec![
             PlayerCreationInstructions {
                 name: String::from("Billy"),
@@ -25,4 +25,5 @@ fn send_game_setup_instructions(mut commands: Commands) {
             },
         ]),
     });
+    commands.run_schedule(StartTurn);
 }

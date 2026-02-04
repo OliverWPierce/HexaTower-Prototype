@@ -1,8 +1,8 @@
 use crate::{
     backend::{
         game_actions::{
-            ActionOrSelectionChanged, CurrentAction, ExecuteActionRequest, SelectionBounds,
-            dangerous_selection_mechanics::SelectedLogTiles,
+            ActionOrSelectionChanged, ActionSource, CurrentAction, CurrentSource,
+            ExecuteActionRequest, SelectionBounds, dangerous_selection_mechanics::SelectedLogTiles,
         },
         game_parameters::SetUpBoard,
     },
@@ -31,11 +31,25 @@ impl Plugin for ExecuteActionButtonPlugin {
 const NO_ACTION_BACKGROUND: Color = Color::Srgba(tailwind::SLATE_600);
 const NO_ACTION_BORDER: Color = Color::Srgba(tailwind::SLATE_800);
 
-const ACTION_READY_BACKGROUND: Color = Color::Srgba(tailwind::RED_600);
-const ACTION_READY_BORDER: Color = Color::Srgba(tailwind::RED_800);
+// const ACTION_READY_BACKGROUND: Color = Color::Srgba(tailwind::RED_600);
+// const ACTION_READY_BORDER: Color = Color::Srgba(tailwind::RED_800);
 
-const ACTION_NOT_READY_BACKGROUND: Color = Color::Srgba(tailwind::RED_900);
-const ACTION_NOT_READY_BORDER: Color = Color::Srgba(tailwind::RED_950);
+// const ACTION_NOT_READY_BACKGROUND: Color = Color::Srgba(tailwind::RED_900);
+// const ACTION_NOT_READY_BORDER: Color = Color::Srgba(tailwind::RED_950);
+
+const ORDER_COLOR_PALETTE: ButtonColorSet = ButtonColorSet {
+    ready_border: Color::Srgba(tailwind::RED_800),
+    unready_border: Color::Srgba(tailwind::RED_950),
+    ready_fill: Color::Srgba(tailwind::RED_600),
+    unready_fill: Color::Srgba(tailwind::RED_900),
+};
+
+const CARD_COLOR_PALETTE: ButtonColorSet = ButtonColorSet {
+    ready_border: Color::Srgba(tailwind::BLUE_800),
+    unready_border: Color::Srgba(tailwind::BLUE_950),
+    ready_fill: Color::Srgba(tailwind::BLUE_600),
+    unready_fill: Color::Srgba(tailwind::BLUE_900),
+};
 
 #[derive(Debug, Component)]
 struct ExecuteActionButton;
@@ -63,8 +77,16 @@ fn add_button(mut commands: Commands, parent: Res<RightPanelEnt>) {
     ));
 }
 
+struct ButtonColorSet {
+    ready_border: Color,
+    unready_border: Color,
+    ready_fill: Color,
+    unready_fill: Color,
+}
+
 fn update_button(
     action: Res<CurrentAction>,
+    action_soruce: Res<CurrentSource>,
     currently_selected: Res<SelectedLogTiles>,
     button: Single<(Entity, &mut BackgroundColor, &mut BorderColor), With<ExecuteActionButton>>,
     mut commands: Commands,
@@ -72,18 +94,33 @@ fn update_button(
     if let Some(action) = action.0 {
         let (button_ent, mut background, mut border) = button.into_inner();
 
+        let Some(source) = action_soruce.0 else {
+            error!("There was a loaded action but no source!");
+            return;
+        };
+
+        let color_palette = match source {
+            ActionSource::Card { .. } => CARD_COLOR_PALETTE,
+            ActionSource::Neither => ORDER_COLOR_PALETTE,
+        };
+
+        let display_text = match source {
+            ActionSource::Card { .. } => Text::new("Play Card"),
+            ActionSource::Neither => Text::new("???"),
+        };
+
         if currently_selected.as_read_only_list().len() < action.bounds().min_tiles {
-            *background = BackgroundColor(ACTION_NOT_READY_BACKGROUND);
-            *border = BorderColor::all(ACTION_NOT_READY_BORDER);
+            *background = BackgroundColor(color_palette.unready_fill);
+            *border = BorderColor::all(color_palette.unready_border);
         } else {
-            *background = BackgroundColor(ACTION_READY_BACKGROUND);
-            *border = BorderColor::all(ACTION_READY_BORDER);
+            *background = BackgroundColor(color_palette.ready_fill);
+            *border = BorderColor::all(color_palette.ready_border);
         }
 
         commands.entity(button_ent).despawn_children();
         commands.spawn((
             ChildOf(button_ent),
-            Text::new("ORDER"),
+            display_text,
             TextLayout::new_with_justify(Justify::Center),
             TextFont {
                 font_size: 36.0,

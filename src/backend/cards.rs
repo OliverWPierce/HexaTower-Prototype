@@ -22,8 +22,18 @@ use super::game_actions::ActionSource;
 #[derive(Debug, Asset, Reflect, Serialize, Deserialize, Clone)]
 pub struct CardAsset {
     pub name: String,
+    pub price: u32,
     pub action: ActionInfo,
     pub image_path: String,
+    pub rarity: CardRarity,
+}
+
+#[derive(Debug, Reflect, Serialize, Deserialize, Clone, Copy)]
+pub enum CardRarity {
+    Legendary,
+    Epic,
+    Rare,
+    Common,
 }
 
 #[derive(Debug, Default, TypePath)]
@@ -66,7 +76,7 @@ pub struct CardsPlugin;
 
 impl Plugin for CardsPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<CardHandles>();
+        app.init_resource::<SortedCardHandles>();
         app.init_resource::<CardFolderAsset>();
 
         app.init_asset::<CardAsset>();
@@ -81,6 +91,11 @@ impl Plugin for CardsPlugin {
         );
         app.add_systems(Update, validate_and_sort_newly_loaded_cards);
 
+        app.add_systems(
+            SetUpBoard,
+            validate_and_sort_newly_loaded_cards.after(open_card_folder),
+        );
+
         //temporary testing systems
         app.add_systems(Update, tmp_add_card_to_inventory.in_set(FrontEndSystems));
 
@@ -89,7 +104,13 @@ impl Plugin for CardsPlugin {
 }
 
 #[derive(Debug, Resource, Default)]
-pub struct CardHandles(pub Vec<Handle<CardAsset>>);
+pub struct SortedCardHandles {
+    pub all_cards: Vec<Handle<CardAsset>>,
+    pub legendary_cards: Vec<Handle<CardAsset>>,
+    pub epic_cards: Vec<Handle<CardAsset>>,
+    pub rare_cards: Vec<Handle<CardAsset>>,
+    pub common_cards: Vec<Handle<CardAsset>>,
+}
 
 #[derive(Resource, Debug, Default)]
 struct CardFolderAsset(Option<Handle<LoadedFolder>>);
@@ -102,7 +123,7 @@ fn open_card_folder(
 }
 
 fn validate_and_sort_newly_loaded_cards(
-    mut sorted_cards: ResMut<CardHandles>,
+    mut sorted_cards: ResMut<SortedCardHandles>,
     mut asset_events: MessageReader<AssetEvent<CardAsset>>,
     mut cards: ResMut<Assets<CardAsset>>,
 ) {
@@ -121,8 +142,17 @@ fn validate_and_sort_newly_loaded_cards(
                     continue;
                 }
 
+                let card_rarity = card.rarity;
+
                 if let Some(handle) = cards.get_strong_handle(*id) {
-                    sorted_cards.0.push(handle);
+                    sorted_cards.all_cards.push(handle.clone());
+
+                    match card_rarity {
+                        CardRarity::Legendary => sorted_cards.legendary_cards.push(handle),
+                        CardRarity::Epic => sorted_cards.epic_cards.push(handle),
+                        CardRarity::Rare => sorted_cards.rare_cards.push(handle),
+                        CardRarity::Common => sorted_cards.common_cards.push(handle),
+                    }
                 }
                 // consider making it also remove the matching handle from the folder asset in order to save memory.
             }
@@ -168,7 +198,7 @@ pub struct InventoryUpdated;
 /// Later, simply change how this system is triggered.
 fn tmp_add_card_to_inventory(
     inputs: Res<ButtonInput<KeyCode>>,
-    all_cards: Res<CardHandles>,
+    all_cards: Res<SortedCardHandles>,
     player: Res<ActivePlayer>,
     mut inventories: Query<&mut PlayerCardInventory>,
     mut commands: Commands,
@@ -186,14 +216,14 @@ fn tmp_add_card_to_inventory(
 
     if inventory.add_card_succeeds(
         all_cards
-            .0
+            .common_cards
             .choose(&mut rng)
             .expect("There were no cards to choose from")
             .clone(),
     ) {
         commands.run_schedule(InventoryUpdated);
     } else {
-        info!("The players inventory was full, so the card was not added.");
+        debug!("The players inventory was full, so the card was not added.");
     }
 }
 
