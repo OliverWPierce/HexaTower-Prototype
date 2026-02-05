@@ -25,13 +25,13 @@ impl Plugin for ShopPlugin {
     }
 }
 #[derive(Component)]
-struct PlayerShopInfo {
-    shop_sets: [Option<ShopOfferSet>; 4],
+pub struct PlayerShopInfo {
+    pub shop_sets: [Option<ShopOfferSet>; 4],
 }
 #[derive(Debug, Default)]
-struct ShopOfferSet {
-    cards_offered: [Option<Handle<CardAsset>>; 3],
-    turns_until_auto_restock: u32,
+pub struct ShopOfferSet {
+    pub cards_offered: [Option<Handle<CardAsset>>; 3],
+    pub turns_until_auto_restock: u32,
     auto_restock_cooldown: u32,
 }
 

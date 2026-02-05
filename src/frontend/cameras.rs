@@ -83,7 +83,7 @@ fn ui_cam(mut commands: Commands) {
 /// As a percent
 pub const LOWER_PANEL_HEIGHT: f32 = 20.0;
 /// As a percent
-pub const LEFT_PANEL_WIDTH: f32 = 17.0;
+pub const LEFT_PANEL_WIDTH: f32 = 20.0;
 /// As a percent
 pub const RIGHT_PANEL_WIDTH: f32 = 17.0;
 
