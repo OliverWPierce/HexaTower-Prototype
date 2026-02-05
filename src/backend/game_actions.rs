@@ -6,7 +6,8 @@ use crate::backend::{
     game_actions::dangerous_selection_mechanics::{SelectedLogTiles, TileSelectionStatus},
     game_parameters::SetUpBoard,
     pieces::{OccupiedByPiece, SpawnLogPiece},
-    players::StartTurn,
+    players::{ActivePlayer, StartTurn},
+    shop::ChangeActivePlayerCoinsBy,
     tiles::{
         AdjacentTiles, DeleteLogTileRequest, EssentialTileCreationSystems, LogicalTileCreated,
     },
@@ -63,6 +64,7 @@ pub enum ActionFunctionality {
     DeleteTile,
     SpawnTower,
     DoubleTakeTest,
+    AlterCoinCount(i32),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect, Serialize, Deserialize)]
@@ -71,6 +73,7 @@ pub enum EligibilityDeterminationMethod {
     AllPieces,
     UnoccupiedTiles,
     PieceChain,
+    None,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect, Serialize, Deserialize)]
@@ -141,6 +144,10 @@ impl SelectionBounds for ActionFunctionality {
                 min_tiles: 2,
                 max_tiles: 2,
             },
+            ActionFunctionality::AlterCoinCount(_) => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
         }
     }
 }
@@ -161,6 +168,10 @@ impl SelectionBounds for EligibilityDeterminationMethod {
                 max_tiles: usize::MAX,
             },
             EligibilityDeterminationMethod::PieceChain => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
+            EligibilityDeterminationMethod::None => Bounds {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
@@ -185,6 +196,7 @@ fn execute_action_functionality(
     selected_tiles: Res<SelectedLogTiles>,
     mut deletions: MessageWriter<DeleteLogTileRequest>,
     mut piece_spawns: MessageWriter<SpawnLogPiece>,
+    mut commands: Commands,
 ) {
     let Some(ActionInfo { functionality, .. }) = action.0 else {
         return;
@@ -212,6 +224,9 @@ fn execute_action_functionality(
                 piece_type: super::pieces::BasePieceType::Tower,
                 log_tile: *selected_tiles.as_read_only_list().first().unwrap(),
             });
+        }
+        ActionFunctionality::AlterCoinCount(delta_coins) => {
+            commands.trigger(ChangeActivePlayerCoinsBy(delta_coins));
         }
     }
 }
@@ -307,6 +322,7 @@ fn evaluate_tiles(
                 }
             }
         }
+        EligibilityDeterminationMethod::None => (),
     }
 }
 

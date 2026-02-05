@@ -23,7 +23,7 @@ impl Plugin for InventoryPlugin {
         app.add_systems(StartTurn, (load_cards_into_ui, update_selection).chain());
         app.add_systems(ActionOrSelectionChanged, update_selection);
 
-        app.add_observer(tmp_load_card_action);
+        app.add_observer(load_card_action);
     }
 }
 #[derive(Debug, Component)]
@@ -156,7 +156,7 @@ fn load_cards_into_ui(
     }
 }
 
-fn tmp_load_card_action(
+fn load_card_action(
     click: On<Pointer<Click>>,
     vis_cards: Query<&CorrespondingInventoryIndex>,
     active_player: Res<ActivePlayer>,

@@ -82,7 +82,7 @@ impl Plugin for CardsPlugin {
         app.init_asset::<CardAsset>();
         app.init_asset_loader::<CardAssetLoader>();
 
-        app.add_systems(SetUpBoard, open_card_folder);
+        app.add_systems(Startup, open_card_folder);
         app.add_systems(
             SetUpBoard,
             initialize_player_inventories
@@ -198,7 +198,7 @@ pub struct InventoryUpdated;
 /// Later, simply change how this system is triggered.
 fn tmp_add_card_to_inventory(
     inputs: Res<ButtonInput<KeyCode>>,
-    all_cards: Res<SortedCardHandles>,
+    sorted_cards: Res<SortedCardHandles>,
     player: Res<ActivePlayer>,
     mut inventories: Query<&mut PlayerCardInventory>,
     mut commands: Commands,
@@ -215,8 +215,8 @@ fn tmp_add_card_to_inventory(
     let mut rng = rand::rng();
 
     if inventory.add_card_succeeds(
-        all_cards
-            .common_cards
+        sorted_cards
+            .all_cards
             .choose(&mut rng)
             .expect("There were no cards to choose from")
             .clone(),

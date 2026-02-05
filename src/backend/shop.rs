@@ -19,6 +19,8 @@ impl Plugin for ShopPlugin {
                 .after(create_basic_players),
         );
 
+        app.add_observer(change_coins);
+
         app.add_systems(StartTurn, refresh_shop_on_new_turn.in_set(BackEndSystems));
     }
 }
@@ -106,7 +108,22 @@ impl ShopOfferSet {
 
 #[derive(Debug, Component)]
 pub struct CoinBag {
-    coins: u32,
+    pub coins: i32,
+}
+#[derive(Debug, Event)]
+pub struct ChangeActivePlayerCoinsBy(pub i32);
+
+fn change_coins(
+    change: On<ChangeActivePlayerCoinsBy>,
+    active_player: Res<ActivePlayer>,
+    mut coins: Query<&mut CoinBag>,
+) {
+    let Ok(mut player_coins) = coins.get_mut(active_player.0) else {
+        warn!("The player had no coinbag.");
+        return;
+    };
+
+    player_coins.coins += change.0;
 }
 
 fn initialize_player_shop_data(players: Query<Entity, With<PlayerMarker>>, mut commands: Commands) {

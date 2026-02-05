@@ -1,5 +1,6 @@
 mod execute_action_button;
 mod inventory;
+mod shop_visuals;
 
 use bevy::prelude::*;
 
@@ -9,6 +10,7 @@ use crate::{
         cameras::{LEFT_PANEL_WIDTH, LOWER_PANEL_HEIGHT, RIGHT_PANEL_WIDTH},
         in_game_ui::{
             execute_action_button::ExecuteActionButtonPlugin, inventory::InventoryPlugin,
+            shop_visuals::ShopVisualPlugin,
         },
     },
 };
@@ -19,7 +21,7 @@ impl Plugin for InGameUI {
     fn build(&self, app: &mut App) {
         app.add_systems(SetUpBoard, create_panels);
 
-        app.add_plugins((ExecuteActionButtonPlugin, InventoryPlugin));
+        app.add_plugins((ExecuteActionButtonPlugin, InventoryPlugin, ShopVisualPlugin));
     }
 }
 
@@ -68,7 +70,9 @@ fn create_panels(mut commands: Commands) {
                 border: UiRect::all(BORDER_WIDTH),
                 flex_grow: 0.0,
                 flex_shrink: 0.0,
-                justify_content: JustifyContent::SpaceEvenly,
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::SpaceAround,
                 ..default()
             },
             BackgroundColor(BACKGROUND_COLOR),
