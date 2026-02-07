@@ -142,6 +142,7 @@ fn load_cards_into_ui(
             children![(
                 ImageNode {
                     image: asset_server.load(card_data.image_path.clone()),
+                    color: card_data.rarity.color(),
                     image_mode: NodeImageMode::Auto,
                     ..Default::default()
                 },

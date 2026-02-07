@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::backend::players::{PlayerCreationInstructions, PlayersToCreate, StartTurn};
+use crate::backend::players::{PlayerCreationInstructions, PlayersToCreate};
 
 pub struct StartupEvents;
 
@@ -25,5 +25,4 @@ fn send_game_setup_instructions(mut commands: Commands) {
             },
         ]),
     });
-    commands.run_schedule(StartTurn);
 }

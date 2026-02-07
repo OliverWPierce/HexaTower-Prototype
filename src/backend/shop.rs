@@ -1,9 +1,9 @@
-use bevy::prelude::*;
+use bevy::{ecs::schedule::ScheduleLabel, log::tracing::event, prelude::*};
 use rand::seq::{IndexedRandom, IteratorRandom};
 
 use crate::backend::{
     BackEndSystems,
-    cards::{CardAsset, SortedCardHandles},
+    cards::{CardAsset, InventoryUpdated, PlayerCardInventory, SortedCardHandles},
     game_parameters::SetUpBoard,
     players::{ActivePlayer, PlayerMarker, StartTurn, create_basic_players},
 };
@@ -20,15 +20,16 @@ impl Plugin for ShopPlugin {
         );
 
         app.add_observer(change_coins);
+        app.add_observer(manage_purchase_requests);
 
         app.add_systems(StartTurn, refresh_shop_on_new_turn.in_set(BackEndSystems));
     }
 }
-#[derive(Component)]
-pub struct PlayerShopInfo {
+#[derive(Component, Debug, Clone)]
+pub struct PlayerShopSetsInfo {
     pub shop_sets: [Option<ShopOfferSet>; 4],
 }
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct ShopOfferSet {
     pub cards_offered: [Option<Handle<CardAsset>>; 3],
     pub turns_until_auto_restock: u32,
@@ -48,11 +49,11 @@ impl ShopOfferSet {
 }
 
 #[derive(Debug, Component)]
-struct PlayerShopLuckStats {
-    legendary: u32,
-    epic: u32,
-    rare: u32,
-    common: u32,
+pub struct PlayerShopLuckStats {
+    pub legendary: u32,
+    pub epic: u32,
+    pub rare: u32,
+    pub common: u32,
 }
 
 impl Default for PlayerShopLuckStats {
@@ -68,7 +69,7 @@ impl Default for PlayerShopLuckStats {
 
 impl ShopOfferSet {
     fn restock(&mut self, sorted_cards: &Res<SortedCardHandles>, stats: &PlayerShopLuckStats) {
-        let raffle_range = 1..(stats.common + stats.rare + stats.epic + stats.legendary);
+        let raffle_range = 0..(stats.common + stats.rare + stats.epic + stats.legendary);
         let mut rng = rand::rng();
 
         self.turns_until_auto_restock = self.auto_restock_cooldown;
@@ -79,12 +80,54 @@ impl ShopOfferSet {
                 .choose(&mut rng)
                 .expect("The raffle range had no magnitude");
 
-            if rolled_num <= stats.common {
-                // choose a common card
-            } else if rolled_num <= (stats.rare + stats.common) {
-                //choose a rare card
-            } else if rolled_num <= (stats.epic + stats.rare + stats.common) {
-                // choose an epic card
+            if rolled_num < stats.common {
+                *slot = if let Some(handle) = sorted_cards.common_cards.iter().choose(&mut rng) {
+                    Some(handle.clone())
+                } else {
+                    warn!(
+                        "A player was supposed to be offered a card with a specific rarity, but no cards of that rarity existed, so they were offered a random card instead."
+                    );
+
+                    Some(
+                        sorted_cards
+                            .all_cards
+                            .choose(&mut rng)
+                            .expect("There were no cards")
+                            .clone(),
+                    )
+                };
+            } else if rolled_num < (stats.rare + stats.common) {
+                *slot = if let Some(handle) = sorted_cards.rare_cards.iter().choose(&mut rng) {
+                    Some(handle.clone())
+                } else {
+                    warn!(
+                        "A player was supposed to be offered a card with a specific rarity, but no cards of that rarity existed, so they were offered a random card instead."
+                    );
+
+                    Some(
+                        sorted_cards
+                            .all_cards
+                            .choose(&mut rng)
+                            .expect("There were no cards")
+                            .clone(),
+                    )
+                };
+            } else if rolled_num < (stats.epic + stats.rare + stats.common) {
+                *slot = if let Some(handle) = sorted_cards.epic_cards.iter().choose(&mut rng) {
+                    Some(handle.clone())
+                } else {
+                    warn!(
+                        "A player was supposed to be offered a card with a specific rarity, but no cards of that rarity existed, so they were offered a random card instead."
+                    );
+
+                    Some(
+                        sorted_cards
+                            .all_cards
+                            .choose(&mut rng)
+                            .expect("There were no cards")
+                            .clone(),
+                    )
+                };
             } else {
                 *slot = if let Some(handle) = sorted_cards.legendary_cards.iter().choose(&mut rng) {
                     Some(handle.clone())
@@ -130,7 +173,7 @@ fn initialize_player_shop_data(players: Query<Entity, With<PlayerMarker>>, mut c
     for player in players {
         commands.entity(player).insert((
             CoinBag { coins: 35 },
-            PlayerShopInfo {
+            PlayerShopSetsInfo {
                 shop_sets: [
                     Some(ShopOfferSet::default().with_restock_data(0, 1)),
                     Some(ShopOfferSet::default().with_restock_data(0, 1)),
@@ -145,7 +188,7 @@ fn initialize_player_shop_data(players: Query<Entity, With<PlayerMarker>>, mut c
 
 fn refresh_shop_on_new_turn(
     active_player: Res<ActivePlayer>,
-    mut shop_data: Query<(&mut PlayerShopInfo, &PlayerShopLuckStats)>,
+    mut shop_data: Query<(&mut PlayerShopSetsInfo, &PlayerShopLuckStats)>,
     sorted_cards: Res<SortedCardHandles>,
 ) {
     let Ok((mut shop, stats)) = shop_data.get_mut(active_player.0) else {
@@ -164,5 +207,60 @@ fn refresh_shop_on_new_turn(
             set.restock(&sorted_cards, stats);
             info!("Restocked a card set for the newly active player.")
         }
+    }
+}
+#[derive(Debug, Event)]
+pub struct TryPurchaseCard {
+    pub set: usize,
+    pub slot: usize,
+}
+
+/// This schedule is used when shop related data has changed that does not change frequently.
+#[derive(Debug, ScheduleLabel, Hash, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ShopDataChanged;
+
+fn manage_purchase_requests(
+    request: On<TryPurchaseCard>,
+    mut commands: Commands,
+    mut players: Query<(
+        &mut CoinBag,
+        &mut PlayerShopSetsInfo,
+        &mut PlayerCardInventory,
+    )>,
+    active_player: Res<ActivePlayer>,
+    card_assets: Res<Assets<CardAsset>>,
+) {
+    debug!("trying to purchase card");
+    let Ok((mut coin_bag, mut shop_offers_info, mut player_inventory)) =
+        players.get_mut(active_player.0)
+    else {
+        warn!("The active player had no associated shop data");
+        return;
+    };
+
+    let Some(set) = &mut shop_offers_info.shop_sets[request.set] else {
+        return;
+    };
+
+    debug!("found the set to be some...");
+
+    let slot = &mut set.cards_offered[request.slot];
+
+    let Some(card_handle) = slot else { return };
+
+    debug!("found the slot to be non-empty");
+
+    let Some(card_data) = card_assets.get(card_handle.id()) else {
+        warn!("a handle failed to get a card asset.");
+        return;
+    };
+
+    if coin_bag.coins >= card_data.price as i32
+        && player_inventory.add_card_succeeds(card_handle.clone())
+    {
+        coin_bag.coins -= card_data.price as i32;
+        *slot = None;
+        commands.run_schedule(ShopDataChanged);
+        commands.run_schedule(InventoryUpdated);
     }
 }

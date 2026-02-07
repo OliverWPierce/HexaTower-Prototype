@@ -1,18 +1,13 @@
-use bevy::{
-    color::palettes::{
-        css::BLACK,
-        tailwind::{self, SLATE_500, SLATE_900},
-    },
-    log::{self, tracing_subscriber::fmt::format},
-    prelude::*,
-};
+use bevy::{color::palettes::tailwind, prelude::*};
 
 use crate::{
     backend::{
-        cards::CardAsset,
+        cards::{CardAsset, CardRarity},
         game_parameters::SetUpBoard,
         players::{ActivePlayer, StartTurn},
-        shop::{CoinBag, PlayerShopInfo},
+        shop::{
+            CoinBag, PlayerShopLuckStats, PlayerShopSetsInfo, ShopDataChanged, TryPurchaseCard,
+        },
     },
     frontend::{
         FrontEndSystems,
@@ -27,6 +22,12 @@ impl Plugin for ShopVisualPlugin {
         app.add_systems(SetUpBoard, basic_shop_orgnanization.after(create_panels));
         app.add_systems(Update, update_coin_count.in_set(FrontEndSystems));
         app.add_systems(StartTurn, render_all_panels.in_set(FrontEndSystems));
+        app.add_systems(
+            ShopDataChanged,
+            (render_all_panels, update_shop_stats_node).in_set(FrontEndSystems),
+        );
+
+        app.add_observer(attempt_purchase);
     }
 }
 
@@ -96,10 +97,58 @@ fn basic_shop_orgnanization(mut commands: Commands, left_panel: Res<LeftPanelEnt
             width: Val::Percent(45.0),
             height: Val::Percent(95.0),
             border: UiRect::all(Val::Px(2.0)),
+            justify_content: JustifyContent::SpaceAround,
+            align_items: AlignItems::Center,
             ..default()
         },
         BorderRadius::all(Val::Px(2.0)),
         BorderColor::all(Color::Srgba(tailwind::SLATE_800)),
+        children![
+            (
+                Text::new("1"),
+                TextFont {
+                    font_size: 16.0,
+                    ..default()
+                },
+                ShopStatNodeMarker::Legendary,
+                TextColor(CardRarity::Legendary.color())
+            ),
+            (
+                Text::new("1"),
+                TextFont {
+                    font_size: 16.0,
+                    ..default()
+                },
+                ShopStatNodeMarker::Epic,
+                TextColor(CardRarity::Epic.color())
+            ),
+            (
+                Text::new("1"),
+                TextFont {
+                    font_size: 16.0,
+                    ..default()
+                },
+                ShopStatNodeMarker::Rare,
+                TextColor(CardRarity::Rare.color())
+            ),
+            (
+                Text::new("1"),
+                TextFont {
+                    font_size: 16.0,
+                    ..default()
+                },
+                ShopStatNodeMarker::Common,
+                TextColor(CardRarity::Common.color())
+            ),
+            (
+                Text::new("1"),
+                TextFont {
+                    font_size: 16.0,
+                    ..default()
+                },
+                ShopStatNodeMarker::All,
+            )
+        ],
     ));
 
     commands.spawn((
@@ -116,6 +165,44 @@ fn basic_shop_orgnanization(mut commands: Commands, left_panel: Res<LeftPanelEnt
     ));
 }
 
+#[derive(Debug, Component)]
+enum ShopStatNodeMarker {
+    Legendary,
+    Epic,
+    Rare,
+    Common,
+    All,
+}
+
+fn update_shop_stats_node(
+    active_player: Res<ActivePlayer>,
+    player_luck: Query<&PlayerShopLuckStats>,
+    displays: Query<(&mut Text, &ShopStatNodeMarker)>,
+) {
+    let Ok(luck_stats) = player_luck.get(active_player.0) else {
+        warn!("The player had no shop luck stats");
+        return;
+    };
+
+    for (mut display_count, data_represented) in displays {
+        match data_represented {
+            ShopStatNodeMarker::Legendary => {
+                *display_count = Text::new(format!("{}", luck_stats.legendary))
+            }
+            ShopStatNodeMarker::Epic => *display_count = Text::new(format!("{}", luck_stats.epic)),
+            ShopStatNodeMarker::Rare => *display_count = Text::new(format!("{}", luck_stats.rare)),
+            ShopStatNodeMarker::Common => {
+                *display_count = Text::new(format!("{}", luck_stats.common))
+            }
+            ShopStatNodeMarker::All => {
+                let total_points =
+                    luck_stats.legendary + luck_stats.epic + luck_stats.rare + luck_stats.common;
+                *display_count = Text::new(format!("{}", total_points))
+            }
+        }
+    }
+}
+
 fn update_coin_count(
     active_player: Res<ActivePlayer>,
     log_coins: Query<&CoinBag>,
@@ -129,10 +216,16 @@ fn update_coin_count(
     text.0 = format!("${}", coin_count.coins);
 }
 
+#[derive(Debug, Component)]
+struct RepresentsLogCardOffered {
+    panel: usize,
+    card_slot: usize,
+}
+
 fn render_all_panels(
     parent: Single<Entity, With<ShopPanelParent>>,
     active_player: Res<ActivePlayer>,
-    player_shop_contents: Query<&PlayerShopInfo>,
+    player_shop_contents: Query<&PlayerShopSetsInfo>,
     card_assets: Res<Assets<CardAsset>>,
     asset_server: ResMut<AssetServer>,
     mut commands: Commands,
@@ -144,7 +237,7 @@ fn render_all_panels(
         return;
     };
 
-    for possible_set in shop_contents.shop_sets.iter() {
+    for (set_index, possible_set) in shop_contents.shop_sets.iter().enumerate() {
         if let Some(set) = possible_set {
             let panel_ent = commands
                 .spawn((
@@ -195,39 +288,87 @@ fn render_all_panels(
                     ChildOf(panel_ent),
                     Node {
                         height: Val::Percent(80.0),
-                        max_width: Val::Percent(95.0),
-                        justify_content: JustifyContent::SpaceAround,
+                        width: Val::Percent(100.0),
+                        justify_content: JustifyContent::SpaceEvenly,
+                        align_content: AlignContent::SpaceAround,
                         ..default()
                     },
                 ))
                 .id();
 
-            for (index, card_slot) in set.cards_offered.iter().enumerate() {
-                // let Some(card_handle) = card_slot else {
-                //     continue;
-                // };
+            for (card_index, card_slot) in set.cards_offered.iter().enumerate() {
+                let Some(card_handle) = card_slot else {
+                    println!("The card slot was empty");
+                    continue;
+                };
 
-                // let Some(card_data) = card_assets.get(card_handle.id()) else {
-                //     warn!("A handle to the card asset failed to retrieve the asset.");
-                //     continue;
-                // };
+                let Some(card_data) = card_assets.get(card_handle.id()) else {
+                    warn!("A handle to the card asset failed to retrieve the asset.");
+                    continue;
+                };
+
+                let card_vis = commands
+                    .spawn((
+                        ChildOf(card_dock),
+                        RepresentsLogCardOffered {
+                            panel: set_index,
+                            card_slot: card_index,
+                        },
+                        Node {
+                            height: Val::Percent(90.0),
+                            aspect_ratio: Some(3.0 / 5.0),
+                            flex_direction: FlexDirection::ColumnReverse,
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::End,
+                            ..Default::default()
+                        },
+                        ImageNode {
+                            image: asset_server.load(card_data.image_path.clone()),
+                            color: card_data.rarity.color(),
+                            ..default()
+                        },
+                    ))
+                    .id();
 
                 commands.spawn((
-                    ChildOf(card_dock),
+                    ChildOf(card_vis),
                     Node {
-                        height: Val::Percent(100.0),
-                        width: Val::Percent(31.5),
-                        flex_direction: FlexDirection::Column,
-                        align_content: AlignContent::Center,
-                        justify_content: JustifyContent::SpaceAround,
-                        ..Default::default()
+                        width: Val::Percent(70.0),
+                        height: Val::Px(30.0),
+                        border: UiRect::all(Val::Px(2.0)),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
                     },
-                    BackgroundColor(SLATE_900.into()),
-                    // add children with the card and its price.
+                    BackgroundColor(tailwind::SLATE_700.into()),
+                    BorderColor::all(tailwind::SLATE_900),
+                    children![(
+                        Text::new(format!("${}", card_data.price)),
+                        TextFont {
+                            font_size: 24.0,
+                            ..Default::default()
+                        },
+                        TextColor(tailwind::EMERALD_500.into()),
+                    )],
                 ));
             }
         } else {
             //draw an empty rectangle where a panel could go.
         }
     }
+}
+
+fn attempt_purchase(
+    click: On<Pointer<Click>>,
+    cards: Query<&RepresentsLogCardOffered>,
+    mut commands: Commands,
+) {
+    let Ok(log_card_cords) = cards.get(click.entity) else {
+        return;
+    };
+
+    commands.trigger(TryPurchaseCard {
+        slot: log_card_cords.card_slot,
+        set: log_card_cords.panel,
+    });
 }

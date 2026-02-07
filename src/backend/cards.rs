@@ -96,9 +96,6 @@ impl Plugin for CardsPlugin {
             validate_and_sort_newly_loaded_cards.after(open_card_folder),
         );
 
-        //temporary testing systems
-        app.add_systems(Update, tmp_add_card_to_inventory.in_set(FrontEndSystems));
-
         app.add_systems(ExecuteSelectedAction, consume_card.in_set(BackEndSystems));
     }
 }
@@ -194,38 +191,6 @@ fn initialize_player_inventories(
 }
 #[derive(Debug, ScheduleLabel, Hash, Eq, PartialEq, PartialOrd, Ord, Clone, Copy)]
 pub struct InventoryUpdated;
-
-/// Later, simply change how this system is triggered.
-fn tmp_add_card_to_inventory(
-    inputs: Res<ButtonInput<KeyCode>>,
-    sorted_cards: Res<SortedCardHandles>,
-    player: Res<ActivePlayer>,
-    mut inventories: Query<&mut PlayerCardInventory>,
-    mut commands: Commands,
-) {
-    if !inputs.just_pressed(KeyCode::KeyA) {
-        return;
-    }
-
-    let Ok(mut inventory) = inventories.get_mut(player.0) else {
-        error!("The active player had no inventory.");
-        return;
-    };
-
-    let mut rng = rand::rng();
-
-    if inventory.add_card_succeeds(
-        sorted_cards
-            .all_cards
-            .choose(&mut rng)
-            .expect("There were no cards to choose from")
-            .clone(),
-    ) {
-        commands.run_schedule(InventoryUpdated);
-    } else {
-        debug!("The players inventory was full, so the card was not added.");
-    }
-}
 
 fn consume_card(
     player: Res<ActivePlayer>,

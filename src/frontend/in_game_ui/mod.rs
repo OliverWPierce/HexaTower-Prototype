@@ -2,10 +2,10 @@ mod execute_action_button;
 mod inventory;
 mod shop_visuals;
 
-use bevy::prelude::*;
+use bevy::{color::palettes::tailwind, prelude::*};
 
 use crate::{
-    backend::game_parameters::SetUpBoard,
+    backend::{cards::CardRarity, game_parameters::SetUpBoard},
     frontend::{
         cameras::{LEFT_PANEL_WIDTH, LOWER_PANEL_HEIGHT, RIGHT_PANEL_WIDTH},
         in_game_ui::{
@@ -28,6 +28,17 @@ impl Plugin for InGameUI {
 pub const BACKGROUND_COLOR: Color = Color::srgb(0.057805, 0.068478, 0.093059);
 pub const BORDER_COLOR: Color = Color::srgb(0.032044, 0.038248, 0.047155);
 pub const BORDER_WIDTH: Val = Val::Percent(0.2);
+
+impl CardRarity {
+    fn color(&self) -> Color {
+        match self {
+            CardRarity::Legendary => tailwind::AMBER_600.into(),
+            CardRarity::Epic => tailwind::PURPLE_600.into(),
+            CardRarity::Rare => tailwind::TEAL_600.into(),
+            CardRarity::Common => tailwind::STONE_600.into(),
+        }
+    }
+}
 
 #[derive(Debug, Resource)]
 pub struct LeftPanelEnt(Entity);
