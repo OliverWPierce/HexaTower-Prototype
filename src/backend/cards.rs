@@ -3,18 +3,14 @@ use bevy::{
     ecs::schedule::ScheduleLabel,
     prelude::*,
 };
-use rand::seq::IndexedRandom;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{
-    backend::{
-        BackEndSystems,
-        game_actions::{ActionInfo, CurrentSource, ExecuteSelectedAction},
-        game_parameters::SetUpBoard,
-        players::{ActivePlayer, PlayerMarker, create_basic_players},
-    },
-    frontend::FrontEndSystems,
+use crate::backend::{
+    BackEndSystems,
+    game_actions::{ActionInfo, CurrentSource, ExecuteSelectedAction},
+    game_parameters::SetUpBoard,
+    players::{ActivePlayer, PlayerMarker, create_basic_players},
 };
 
 use super::game_actions::ActionSource;
@@ -26,6 +22,7 @@ pub struct CardAsset {
     pub action: ActionInfo,
     pub image_path: String,
     pub rarity: CardRarity,
+    pub description: String,
 }
 
 #[derive(Debug, Reflect, Serialize, Deserialize, Clone, Copy)]

@@ -5,7 +5,10 @@ use crate::{
         game_parameters::SetUpBoard,
         players::{ActivePlayer, StartTurn},
     },
-    frontend::in_game_ui::{LowerPanelEnt, create_panels},
+    frontend::in_game_ui::{
+        LowerPanelEnt, create_panels,
+        inspector::{InspectorPanel, inspect_card},
+    },
 };
 
 use bevy::{color::palettes::tailwind, prelude::*};
@@ -24,6 +27,7 @@ impl Plugin for InventoryPlugin {
         app.add_systems(ActionOrSelectionChanged, update_selection);
 
         app.add_observer(load_card_action);
+        app.add_observer(inspect_inventory_cards);
     }
 }
 #[derive(Debug, Component)]
@@ -142,7 +146,7 @@ fn load_cards_into_ui(
             children![(
                 ImageNode {
                     image: asset_server.load(card_data.image_path.clone()),
-                    color: card_data.rarity.color(),
+                    color: card_data.rarity.card_color(),
                     image_mode: NodeImageMode::Auto,
                     ..Default::default()
                 },
@@ -226,4 +230,42 @@ fn update_selection(
             }
         }
     }
+}
+#[allow(clippy::too_many_arguments)]
+fn inspect_inventory_cards(
+    hover: On<Pointer<Over>>,
+    inspector: Single<Entity, With<InspectorPanel>>,
+    vis_cards: Query<&CorrespondingInventoryIndex>,
+    active_player: Res<ActivePlayer>,
+    inventories: Query<&PlayerCardInventory>,
+    card_assets: Res<Assets<CardAsset>>,
+    mut asset_server: ResMut<AssetServer>,
+    mut commands: Commands,
+) {
+    let Ok(CorrespondingInventoryIndex(index)) = vis_cards.get(hover.entity) else {
+        return;
+    };
+
+    let Ok(log_inventory) = inventories.get(active_player.0) else {
+        error!("The player had no inventory");
+        return;
+    };
+
+    let Some(card_handle) = log_inventory.cards.get(*index) else {
+        error!("A vis card pointed to an index that was out of the inventory's bounds");
+        return;
+    };
+
+    let Some(card_data) = card_assets.get(card_handle.id()) else {
+        warn!("A handle to the card asset failed to retrieve the asset.");
+        return;
+    };
+
+    inspect_card(
+        inspector.entity(),
+        &mut commands,
+        card_data,
+        &mut asset_server,
+        true,
+    );
 }

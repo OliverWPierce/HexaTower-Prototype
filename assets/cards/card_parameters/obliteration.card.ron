@@ -7,5 +7,6 @@ CardAsset (
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 10)),
         ),
     image_path: "cards/card_images/GreenBoost.png",
-    rarity: Rare
+    rarity: Rare,
+    description: "Delete a tile. Any tile. I am... innevitable.",
 )

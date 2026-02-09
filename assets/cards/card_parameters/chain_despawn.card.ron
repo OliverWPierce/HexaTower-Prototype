@@ -8,4 +8,5 @@ CardAsset (
         ),
     image_path: "cards/card_images/GoldProjectiles.png",
     rarity: Legendary,
+    description: "Direct chain lightning between a minimum of three pieces, instantly destroying them and their tiles."
 )

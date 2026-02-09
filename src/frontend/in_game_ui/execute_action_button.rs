@@ -54,7 +54,7 @@ const CARD_COLOR_PALETTE: ButtonColorSet = ButtonColorSet {
 #[derive(Debug, Component)]
 struct ExecuteActionButton;
 
-fn add_button(mut commands: Commands, parent: Res<RightPanelEnt>) {
+pub fn add_button(mut commands: Commands, parent: Res<RightPanelEnt>) {
     commands.spawn((
         ChildOf(parent.0),
         Node {
@@ -63,7 +63,6 @@ fn add_button(mut commands: Commands, parent: Res<RightPanelEnt>) {
             border: UiRect::all(Val::Percent(2.0)),
             flex_direction: FlexDirection::Column,
             justify_content: JustifyContent::Center,
-
             ..default()
         },
         BackgroundColor(NO_ACTION_BACKGROUND),

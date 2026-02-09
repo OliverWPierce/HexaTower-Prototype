@@ -1,4 +1,4 @@
-use bevy::{color::palettes::tailwind, prelude::*};
+use bevy::{color::palettes::tailwind, picking::hover::Hovered, prelude::*};
 
 use crate::{
     backend::{
@@ -11,7 +11,10 @@ use crate::{
     },
     frontend::{
         FrontEndSystems,
-        in_game_ui::{LeftPanelEnt, create_panels},
+        in_game_ui::{
+            LeftPanelEnt, create_panels,
+            inspector::{InspectorPanel, inspect_card},
+        },
     },
 };
 
@@ -20,14 +23,15 @@ pub struct ShopVisualPlugin;
 impl Plugin for ShopVisualPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(SetUpBoard, basic_shop_orgnanization.after(create_panels));
-        app.add_systems(Update, update_coin_count.in_set(FrontEndSystems));
-        app.add_systems(StartTurn, render_all_panels.in_set(FrontEndSystems));
         app.add_systems(
-            ShopDataChanged,
-            (render_all_panels, update_shop_stats_node).in_set(FrontEndSystems),
+            Update,
+            (update_coin_count, update_shop_stats_node).in_set(FrontEndSystems),
         );
+        app.add_systems(StartTurn, render_all_panels.in_set(FrontEndSystems));
+        app.add_systems(ShopDataChanged, render_all_panels.in_set(FrontEndSystems));
 
         app.add_observer(attempt_purchase);
+        app.add_observer(inspect_shop_card);
     }
 }
 
@@ -111,7 +115,7 @@ fn basic_shop_orgnanization(mut commands: Commands, left_panel: Res<LeftPanelEnt
                     ..default()
                 },
                 ShopStatNodeMarker::Legendary,
-                TextColor(CardRarity::Legendary.color())
+                TextColor(CardRarity::Legendary.text_color())
             ),
             (
                 Text::new("1"),
@@ -120,7 +124,7 @@ fn basic_shop_orgnanization(mut commands: Commands, left_panel: Res<LeftPanelEnt
                     ..default()
                 },
                 ShopStatNodeMarker::Epic,
-                TextColor(CardRarity::Epic.color())
+                TextColor(CardRarity::Epic.text_color())
             ),
             (
                 Text::new("1"),
@@ -129,7 +133,7 @@ fn basic_shop_orgnanization(mut commands: Commands, left_panel: Res<LeftPanelEnt
                     ..default()
                 },
                 ShopStatNodeMarker::Rare,
-                TextColor(CardRarity::Rare.color())
+                TextColor(CardRarity::Rare.text_color())
             ),
             (
                 Text::new("1"),
@@ -138,12 +142,12 @@ fn basic_shop_orgnanization(mut commands: Commands, left_panel: Res<LeftPanelEnt
                     ..default()
                 },
                 ShopStatNodeMarker::Common,
-                TextColor(CardRarity::Common.color())
+                TextColor(CardRarity::Common.text_color())
             ),
             (
                 Text::new("1"),
                 TextFont {
-                    font_size: 16.0,
+                    font_size: 24.0,
                     ..default()
                 },
                 ShopStatNodeMarker::All,
@@ -324,7 +328,7 @@ fn render_all_panels(
                         },
                         ImageNode {
                             image: asset_server.load(card_data.image_path.clone()),
-                            color: card_data.rarity.color(),
+                            color: card_data.rarity.card_color(),
                             ..default()
                         },
                     ))
@@ -371,4 +375,47 @@ fn attempt_purchase(
         slot: log_card_cords.card_slot,
         set: log_card_cords.panel,
     });
+}
+#[allow(clippy::too_many_arguments)]
+fn inspect_shop_card(
+    hover: On<Pointer<Over>>,
+    vis_shop_cards: Query<&RepresentsLogCardOffered>,
+    active_player: Res<ActivePlayer>,
+    player_shop_contents: Query<&PlayerShopSetsInfo>,
+    card_assets: Res<Assets<CardAsset>>,
+    mut asset_server: ResMut<AssetServer>,
+    mut commands: Commands,
+    inspector: Single<Entity, With<InspectorPanel>>,
+) {
+    let Ok(log_card_cords) = vis_shop_cards.get(hover.entity) else {
+        return;
+    };
+
+    let Ok(log_shop) = player_shop_contents.get(active_player.0) else {
+        warn!("The player had no shop contents");
+        return;
+    };
+
+    let Some(log_set) = &log_shop.shop_sets[log_card_cords.panel] else {
+        warn!("A visual card in the shop pointed to a panel that doesn't exist.");
+        return;
+    };
+
+    let Some(card_handle) = &log_set.cards_offered[log_card_cords.card_slot] else {
+        warn!("A visual card in the shop pointed to a logical card that doesn't exist.");
+        return;
+    };
+
+    let Some(card_data) = card_assets.get(card_handle.id()) else {
+        warn!("A handle to the card asset failed to retrieve the asset.");
+        return;
+    };
+
+    inspect_card(
+        inspector.entity(),
+        &mut commands,
+        card_data,
+        &mut asset_server,
+        false,
+    );
 }

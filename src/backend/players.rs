@@ -7,7 +7,12 @@ pub struct PlayersPlugin;
 impl Plugin for PlayersPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(SetUpBoard, create_basic_players.in_set(BackEndSystems));
-        app.add_systems(Update, tmp_switch_player.in_set(BackEndSystems));
+
+        app.add_observer(switch_player);
+
+        //TMP systems!!!
+        app.add_systems(Update, tmp_update_and_check_start_delay);
+        app.add_systems(SetUpBoard, tmp_add_start_turn_delay_timer);
     }
 }
 
@@ -48,12 +53,11 @@ pub fn create_basic_players(qued_players: Res<PlayersToCreate>, mut commands: Co
             ),
         });
     }
-
     commands.remove_resource::<PlayersToCreate>();
 }
 
 #[derive(Debug, Component)]
-pub struct DisplayName(String);
+pub struct DisplayName(pub String);
 
 #[derive(Debug, Component)]
 pub struct PlayerMarker;
@@ -66,24 +70,44 @@ struct PlayerTurnOrder {
 #[derive(Debug, ScheduleLabel, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct StartTurn;
 
-fn tmp_switch_player(
-    inputs: Res<ButtonInput<KeyCode>>,
+#[derive(Debug, Event)]
+pub struct SwitchPlayerRequest;
+
+fn switch_player(
+    _request: On<SwitchPlayerRequest>,
     mut commands: Commands,
-    players: Query<(&PlayerTurnOrder, &DisplayName)>,
+    players: Query<(&PlayerTurnOrder)>,
     mut active: ResMut<ActivePlayer>,
 ) {
-    if !inputs.just_pressed(KeyCode::KeyS) {
-        return;
-    }
-
-    let Ok((next, name)) = players.get(active.0) else {
+    let Ok(next) = players.get(active.0) else {
         error!("The entity listed as the current player was not a player.");
         return;
     };
 
     active.0 = next.next_player;
 
-    println!("Made {} the active player", name.0);
-
     commands.run_schedule(StartTurn);
+}
+
+/// The purpose of this is to wait for all background assets to load before starting the first turn. Later, it should be replaced with an actual system for tracking loaded assets.
+#[derive(Debug, Resource)]
+struct TmpTimerForFirstTurn(Timer);
+
+fn tmp_add_start_turn_delay_timer(mut commands: Commands) {
+    commands.insert_resource(TmpTimerForFirstTurn(Timer::from_seconds(
+        5.0,
+        TimerMode::Once,
+    )));
+}
+
+fn tmp_update_and_check_start_delay(
+    mut commands: Commands,
+    mut timer: If<ResMut<TmpTimerForFirstTurn>>,
+    time: Res<Time>,
+) {
+    timer.0.0.tick(time.delta());
+    if timer.0.0.is_finished() {
+        commands.remove_resource::<TmpTimerForFirstTurn>();
+        commands.run_schedule(StartTurn);
+    }
 }

@@ -8,4 +8,5 @@ CardAsset (
         ),
     image_path: "cards/card_images/GoldSpawn.png",
     rarity: Common,
+    description: "Spawn a tower on any empty tile. And so it begins... I will continue to write an absurdly long description to see how the game copes with rendering. Is this too much? How about now?"
 )

@@ -1,5 +1,7 @@
 mod execute_action_button;
+mod inspector;
 mod inventory;
+mod player_info_displays;
 mod shop_visuals;
 
 use bevy::{color::palettes::tailwind, prelude::*};
@@ -9,7 +11,8 @@ use crate::{
     frontend::{
         cameras::{LEFT_PANEL_WIDTH, LOWER_PANEL_HEIGHT, RIGHT_PANEL_WIDTH},
         in_game_ui::{
-            execute_action_button::ExecuteActionButtonPlugin, inventory::InventoryPlugin,
+            execute_action_button::ExecuteActionButtonPlugin, inspector::InspectorPlugin,
+            inventory::InventoryPlugin, player_info_displays::EndTurnButtonPlugin,
             shop_visuals::ShopVisualPlugin,
         },
     },
@@ -21,7 +24,13 @@ impl Plugin for InGameUI {
     fn build(&self, app: &mut App) {
         app.add_systems(SetUpBoard, create_panels);
 
-        app.add_plugins((ExecuteActionButtonPlugin, InventoryPlugin, ShopVisualPlugin));
+        app.add_plugins((
+            ExecuteActionButtonPlugin,
+            InventoryPlugin,
+            ShopVisualPlugin,
+            EndTurnButtonPlugin,
+            InspectorPlugin,
+        ));
     }
 }
 
@@ -30,12 +39,25 @@ pub const BORDER_COLOR: Color = Color::srgb(0.032044, 0.038248, 0.047155);
 pub const BORDER_WIDTH: Val = Val::Percent(0.2);
 
 impl CardRarity {
-    fn color(&self) -> Color {
+    fn card_color(&self) -> Color {
         match self {
-            CardRarity::Legendary => tailwind::AMBER_600.into(),
+            CardRarity::Legendary => tailwind::ROSE_600.into(),
             CardRarity::Epic => tailwind::PURPLE_600.into(),
             CardRarity::Rare => tailwind::TEAL_600.into(),
             CardRarity::Common => tailwind::STONE_600.into(),
+        }
+    }
+
+    fn text_color(&self) -> Color {
+        self.card_color().with_saturation(1.0)
+    }
+
+    fn display_name(&self) -> String {
+        match self {
+            CardRarity::Legendary => String::from("Legendary"),
+            CardRarity::Epic => String::from("Epic"),
+            CardRarity::Rare => String::from("Rare"),
+            CardRarity::Common => String::from("Common"),
         }
     }
 }
@@ -103,7 +125,7 @@ fn create_panels(mut commands: Commands) {
                 border: UiRect::all(BORDER_WIDTH),
                 flex_grow: 0.0,
                 flex_shrink: 0.0,
-                justify_content: JustifyContent::FlexStart,
+                justify_content: JustifyContent::SpaceAround,
                 align_items: AlignItems::Center,
                 flex_direction: FlexDirection::Column,
                 ..default()

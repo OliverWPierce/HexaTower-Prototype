@@ -1,4 +1,4 @@
-use bevy::{ecs::schedule::ScheduleLabel, log::tracing::event, prelude::*};
+use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
 use rand::seq::{IndexedRandom, IteratorRandom};
 
 use crate::backend::{
@@ -61,8 +61,8 @@ impl Default for PlayerShopLuckStats {
         Self {
             legendary: 1,
             epic: 2,
-            rare: 3,
-            common: 4,
+            rare: 5,
+            common: 10,
         }
     }
 }
@@ -205,7 +205,6 @@ fn refresh_shop_on_new_turn(
             set.turns_until_auto_restock -= 1
         } else {
             set.restock(&sorted_cards, stats);
-            info!("Restocked a card set for the newly active player.")
         }
     }
 }
