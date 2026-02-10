@@ -44,7 +44,7 @@ impl Plugin for GameActionsPlugin {
 
         app.add_systems(
             ExecuteSelectedAction,
-            clear_action_related_data.in_set(ClearBackendDataSystems),
+            clear_action_related_data.in_set(ClearBackendData),
         );
 
         app.add_systems(StartTurn, clear_action_related_data.in_set(BackEndSystems));
@@ -57,7 +57,7 @@ impl Plugin for GameActionsPlugin {
 
 /// This set is used to tell a system to run only after front end systems run. It ensures the backend doesn't delete data before the front end gets to look at it.
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ClearBackendDataSystems;
+pub struct ClearBackendData;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect, Serialize, Deserialize)]
 pub enum ActionFunctionality {

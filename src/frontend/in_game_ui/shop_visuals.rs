@@ -1,4 +1,4 @@
-use bevy::{color::palettes::tailwind, picking::hover::Hovered, prelude::*};
+use bevy::{color::palettes::tailwind, prelude::*};
 
 use crate::{
     backend::{

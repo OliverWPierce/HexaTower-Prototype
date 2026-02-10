@@ -1,5 +1,13 @@
 use bevy::prelude::*;
 
+use bevy::{
+    asset::{AssetLoader, LoadedFolder},
+    ecs::schedule::ScheduleLabel,
+    prelude::*,
+};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
 use crate::backend::BackEndSystems;
 
 pub struct PiecesPlugin;
@@ -16,6 +24,49 @@ impl Plugin for PiecesPlugin {
         );
     }
 }
+
+#[derive(Debug, Default, TypePath)]
+pub struct PieceAssetLoader;
+
+#[derive(Serialize, Debug, Deserialize, Reflect, Asset, Clone)]
+pub struct PieceAsset {
+    name: String,
+    model_path: String,
+}
+
+#[non_exhaustive]
+#[derive(Debug, Error)]
+pub enum PieceAssetLoaderError {
+    /// An [IO](std::io) Error
+    #[error("Could not load asset: {0}")]
+    Io(#[from] std::io::Error),
+    /// A [RON](ron) Error
+    #[error("Could not parse RON: {0}")]
+    RonSpannedError(#[from] ron::error::SpannedError),
+}
+
+impl AssetLoader for PieceAssetLoader {
+    type Asset = PieceAsset;
+    type Settings = ();
+    type Error = PieceAssetLoaderError;
+
+    async fn load(
+        &self,
+        reader: &mut dyn bevy::asset::io::Reader,
+        _settings: &Self::Settings,
+        _load_context: &mut bevy::asset::LoadContext<'_>,
+    ) -> Result<Self::Asset, Self::Error> {
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).await?;
+        let card = ron::de::from_bytes::<PieceAsset>(&bytes)?;
+        Ok(card)
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &["piece.ron"]
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Component)]
 pub enum BasePieceType {
     Tower,

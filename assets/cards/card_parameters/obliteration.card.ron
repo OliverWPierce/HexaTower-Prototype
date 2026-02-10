@@ -8,5 +8,5 @@ CardAsset (
         ),
     image_path: "cards/card_images/GreenBoost.png",
     rarity: Rare,
-    description: "Delete a tile. Any tile. I am... innevitable.",
+    description: "Delete a tile. Any tile. I am... innevitable."
 )

@@ -6,9 +6,12 @@ use bevy::{
 use crate::{
     backend::{
         game_parameters::SetUpBoard,
-        players::{ActivePlayer, DisplayName, StartTurn, SwitchPlayerRequest},
+        players::{ActivePlayer, StartTurn, SwitchPlayerRequest},
     },
-    frontend::in_game_ui::{RightPanelEnt, inspector},
+    frontend::{
+        in_game_ui::{RightPanelEnt, inspector},
+        visual_player_data::{DataForPlayer, DisplayName},
+    },
 };
 
 pub struct EndTurnButtonPlugin;
@@ -75,13 +78,15 @@ fn request_turn_change(
 
 fn update_displayed_name(
     active_player: Res<ActivePlayer>,
-    player_names: Query<&DisplayName>,
+    player_names: Query<(&DataForPlayer, &DisplayName)>,
     mut text: Single<&mut Text, With<PlayerNameDisplay>>,
 ) {
-    let Ok(name) = player_names.get(active_player.0) else {
-        warn!("The player had no display name");
-        return;
-    };
+    for (player, name) in player_names {
+        if active_player.0 != player.0 {
+            continue;
+        }
 
-    text.0 = name.0.clone();
+        text.0 = name.0.clone();
+        break;
+    }
 }

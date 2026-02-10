@@ -16,12 +16,11 @@ fn send_game_setup_instructions(mut commands: Commands) {
         player_instructions: PlayersToCreate(vec![
             PlayerCreationInstructions {
                 name: String::from("Billy"),
+                base_pate_path: String::from("RedPieceBasePlate.glb"),
             },
             PlayerCreationInstructions {
-                name: String::from("Joe"),
-            },
-            PlayerCreationInstructions {
-                name: String::from("XX_EsmereldaDaBoss458_XX"),
+                name: String::from("JoeDaBoss"),
+                base_pate_path: String::from("BluePieceBasePlate.glb"),
             },
         ]),
     });

@@ -229,7 +229,6 @@ fn manage_purchase_requests(
     active_player: Res<ActivePlayer>,
     card_assets: Res<Assets<CardAsset>>,
 ) {
-    debug!("trying to purchase card");
     let Ok((mut coin_bag, mut shop_offers_info, mut player_inventory)) =
         players.get_mut(active_player.0)
     else {
@@ -241,13 +240,9 @@ fn manage_purchase_requests(
         return;
     };
 
-    debug!("found the set to be some...");
-
     let slot = &mut set.cards_offered[request.slot];
 
     let Some(card_handle) = slot else { return };
-
-    debug!("found the slot to be non-empty");
 
     let Some(card_data) = card_assets.get(card_handle.id()) else {
         warn!("a handle failed to get a card asset.");

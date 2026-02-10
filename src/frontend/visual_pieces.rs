@@ -1,12 +1,18 @@
+use std::process::id;
+
 use bevy::{prelude::*, time::Stopwatch};
 
 use crate::{
     backend::{
         game_parameters::SetUpBoard,
         pieces::{BasePieceType, LogPieceDespawned, LogPieceSpawned, OccupiesTile},
+        players::ActivePlayer,
         tiles::LogicalTileLocation,
     },
-    frontend::FrontEndSystems,
+    frontend::{
+        FrontEndSystems,
+        visual_player_data::{DataForPlayer, PieceBasePlateModel},
+    },
 };
 
 pub struct VisPiecesPlugin;
@@ -35,7 +41,8 @@ pub struct VisPieceOf(pub Entity);
 
 fn initialize_piece_model_handles(mut commands: Commands, asset_server: ResMut<AssetServer>) {
     commands.insert_resource(PieceModelHandles {
-        tower: asset_server.load(GltfAssetLabel::Scene(0).from_asset("RedPeiceBasePlate.glb")),
+        tower: asset_server
+            .load(GltfAssetLabel::Scene(0).from_asset("pieces/piece_models/Obelisk.glb")),
     });
 }
 
@@ -45,11 +52,16 @@ struct AnimationStopwatch {
     scale_in: bool,
 }
 
+const PIECE_BASEPLATE_THICKNESS: f32 = 0.113;
+
 fn spawn_peice_visuals(
     mut new_log_spawns: MessageReader<LogPieceSpawned>,
     mesh_handles: Res<PieceModelHandles>,
     log_pieces: Query<(&BasePieceType, &OccupiesTile)>,
     log_tile_location: Query<&LogicalTileLocation>,
+    active_player: Res<ActivePlayer>,
+    base_plates: Query<(&DataForPlayer, &PieceBasePlateModel)>,
+    asset_server: ResMut<AssetServer>,
     mut commands: Commands,
 ) {
     for LogPieceSpawned(log_piece) in new_log_spawns.read() {
@@ -66,8 +78,19 @@ fn spawn_peice_visuals(
             .expect("the logical piece did not occupy a logical tile with a logical location.")
             .read();
 
+        let mut base_plate_model: Handle<Scene> =
+            asset_server.load(GltfAssetLabel::Scene(0).from_asset("assets/VisualError3d.glb"));
+
+        for (player_represented, plate_model) in base_plates.iter() {
+            if active_player.0 != player_represented.0 {
+                continue;
+            }
+            base_plate_model = plate_model.0.clone();
+            break;
+        }
+
         commands.spawn((
-            SceneRoot(handle),
+            SceneRoot(base_plate_model),
             Transform {
                 translation: Vec3::new(physical_position.x, 0.0, physical_position.y),
                 scale: Vec3::ZERO,
@@ -78,6 +101,14 @@ fn spawn_peice_visuals(
                 elapsed: Stopwatch::new(),
                 scale_in: true,
             },
+            children![(
+                SceneRoot(handle),
+                Transform {
+                    translation: Vec3::new(0.0, PIECE_BASEPLATE_THICKNESS, 0.0),
+                    scale: Vec3::ONE,
+                    ..Default::default()
+                },
+            )],
         ));
     }
 }

@@ -1,6 +1,8 @@
-use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
+use bevy::{
+    ecs::schedule::ScheduleLabel, prelude::*, render::render_resource::encase::private::Writer,
+};
 
-use crate::backend::{BackEndSystems, game_parameters::SetUpBoard};
+use crate::backend::{BackEndSystems, game_actions::ClearBackendData, game_parameters::SetUpBoard};
 
 pub struct PlayersPlugin;
 
@@ -9,6 +11,12 @@ impl Plugin for PlayersPlugin {
         app.add_systems(SetUpBoard, create_basic_players.in_set(BackEndSystems));
 
         app.add_observer(switch_player);
+        app.add_message::<CreatedLogPlayer>();
+
+        app.add_systems(
+            SetUpBoard,
+            remove_resource_with_player_creation_instructions.in_set(ClearBackendData),
+        );
 
         //TMP systems!!!
         app.add_systems(Update, tmp_update_and_check_start_delay);
@@ -19,6 +27,7 @@ impl Plugin for PlayersPlugin {
 #[derive(Debug, Clone)]
 pub struct PlayerCreationInstructions {
     pub name: String,
+    pub base_pate_path: String,
 }
 
 #[derive(Debug, Resource, Clone)]
@@ -27,13 +36,19 @@ pub struct PlayersToCreate(pub Vec<PlayerCreationInstructions>);
 #[derive(Debug, Resource)]
 pub struct ActivePlayer(pub Entity);
 
-pub fn create_basic_players(qued_players: Res<PlayersToCreate>, mut commands: Commands) {
+#[derive(Debug, Message, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct CreatedLogPlayer(pub Entity, pub usize);
+
+pub fn create_basic_players(
+    qued_players: Res<PlayersToCreate>,
+    mut commands: Commands,
+    mut created_players: MessageWriter<CreatedLogPlayer>,
+) {
     let mut players_created = Vec::new();
 
-    for PlayerCreationInstructions { name } in qued_players.0.iter() {
-        let new_player = commands
-            .spawn((DisplayName(name.clone()), PlayerMarker))
-            .id();
+    for (index, _) in qued_players.0.iter().enumerate() {
+        let new_player = commands.spawn(PlayerMarker).id();
+        created_players.write(CreatedLogPlayer(new_player, index));
 
         players_created.push(new_player);
     }
@@ -53,11 +68,11 @@ pub fn create_basic_players(qued_players: Res<PlayersToCreate>, mut commands: Co
             ),
         });
     }
-    commands.remove_resource::<PlayersToCreate>();
 }
 
-#[derive(Debug, Component)]
-pub struct DisplayName(pub String);
+fn remove_resource_with_player_creation_instructions(mut commands: Commands) {
+    commands.remove_resource::<PlayersToCreate>();
+}
 
 #[derive(Debug, Component)]
 pub struct PlayerMarker;
