@@ -1,11 +1,9 @@
-use std::process::id;
-
 use bevy::{prelude::*, time::Stopwatch};
 
 use crate::{
     backend::{
         game_parameters::SetUpBoard,
-        pieces::{BasePieceType, LogPieceDespawned, LogPieceSpawned, OccupiesTile},
+        pieces::{BasePieceType, LogPieceDespawned, OccupiesTile, SpawnedLogPieceInfo},
         players::ActivePlayer,
         tiles::LogicalTileLocation,
     },
@@ -55,7 +53,7 @@ struct AnimationStopwatch {
 const PIECE_BASEPLATE_THICKNESS: f32 = 0.113;
 
 fn spawn_peice_visuals(
-    mut new_log_spawns: MessageReader<LogPieceSpawned>,
+    mut new_log_spawns: MessageReader<SpawnedLogPieceInfo>,
     mesh_handles: Res<PieceModelHandles>,
     log_pieces: Query<(&BasePieceType, &OccupiesTile)>,
     log_tile_location: Query<&LogicalTileLocation>,
@@ -64,7 +62,7 @@ fn spawn_peice_visuals(
     asset_server: ResMut<AssetServer>,
     mut commands: Commands,
 ) {
-    for LogPieceSpawned(log_piece) in new_log_spawns.read() {
+    for SpawnedLogPieceInfo(log_piece) in new_log_spawns.read() {
         let (piece_type, log_occupied) = log_pieces
             .get(*log_piece)
             .expect("A logical piece spawned message did not contain a logical piece");
@@ -79,7 +77,7 @@ fn spawn_peice_visuals(
             .read();
 
         let mut base_plate_model: Handle<Scene> =
-            asset_server.load(GltfAssetLabel::Scene(0).from_asset("assets/VisualError3d.glb"));
+            asset_server.load(GltfAssetLabel::Scene(0).from_asset("VisualError3d.glb"));
 
         for (player_represented, plate_model) in base_plates.iter() {
             if active_player.0 != player_represented.0 {

@@ -5,7 +5,7 @@ use crate::backend::{
     BackEndSystems,
     game_actions::dangerous_selection_mechanics::{SelectedLogTiles, TileSelectionStatus},
     game_parameters::SetUpBoard,
-    pieces::{OccupiedByPiece, SpawnLogPiece},
+    pieces::{OccupiedByPiece, Piece, SpawnLogPiece},
     players::StartTurn,
     shop::ChangeActivePlayerCoinsBy,
     tiles::{
@@ -59,15 +59,15 @@ impl Plugin for GameActionsPlugin {
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ClearBackendData;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ActionFunctionality {
     DeleteTile,
-    SpawnTower,
+    SpawnPiece(Handle<Piece>),
     DoubleTakeTest,
     AlterCoinCount(i32),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum EligibilityDeterminationMethod {
     AllTiles,
     AllPieces,
@@ -76,12 +76,13 @@ pub enum EligibilityDeterminationMethod {
     None,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect, Serialize, Deserialize)]
-pub struct ActionInfo {
-    functionality: ActionFunctionality,
-    eligibility_method: EligibilityDeterminationMethod,
-    selection_count_bounds: GameDesignBounds,
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct GameAction {
+    pub functionality: ActionFunctionality,
+    pub eligibility_method: EligibilityDeterminationMethod,
+    pub selection_count_bounds: GameDesignBounds,
 }
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ActionSource {
     Card { inventory_index: usize },
@@ -91,16 +92,16 @@ pub enum ActionSource {
 #[derive(Debug, Resource, Default)]
 pub struct CurrentSource(pub Option<ActionSource>);
 
-#[derive(Debug, Event)]
+#[derive(Debug, Event, Clone)]
 pub enum SetActionTo {
     None,
     Action {
-        action: ActionInfo,
+        action: GameAction,
         source: ActionSource,
     },
 }
 
-impl ActionInfo {
+impl GameAction {
     pub fn is_valid(&self) -> bool {
         (self.bounds().min_tiles >= self.eligibility_method.bounds().min_tiles)
             && (self.bounds().min_tiles >= self.functionality.bounds().min_tiles)
@@ -110,14 +111,14 @@ impl ActionInfo {
     }
 }
 
-impl SelectionBounds for ActionInfo {
+impl SelectionBounds for GameAction {
     fn bounds(&self) -> Bounds {
         self.selection_count_bounds.0
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect, Serialize, Deserialize)]
-struct GameDesignBounds(Bounds);
+pub struct GameDesignBounds(Bounds);
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect, Serialize, Deserialize)]
 pub struct Bounds {
@@ -136,15 +137,15 @@ impl SelectionBounds for ActionFunctionality {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
-            ActionFunctionality::SpawnTower => Bounds {
-                min_tiles: 0,
-                max_tiles: usize::MAX,
-            },
             ActionFunctionality::DoubleTakeTest => Bounds {
                 min_tiles: 2,
                 max_tiles: 2,
             },
             ActionFunctionality::AlterCoinCount(_) => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
+            ActionFunctionality::SpawnPiece(_) => Bounds {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
@@ -180,7 +181,7 @@ impl SelectionBounds for EligibilityDeterminationMethod {
 }
 
 #[derive(Debug, Resource, PartialEq, Eq, Default)]
-pub struct CurrentAction(pub Option<ActionInfo>);
+pub struct CurrentAction(pub Option<GameAction>);
 
 #[derive(Debug, ScheduleLabel, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ExecuteSelectedAction;
@@ -198,7 +199,7 @@ fn execute_action_functionality(
     mut piece_spawns: MessageWriter<SpawnLogPiece>,
     mut commands: Commands,
 ) {
-    let Some(ActionInfo { functionality, .. }) = action.0 else {
+    let Some(GameAction { functionality, .. }) = action.0.clone() else {
         return;
     };
 
@@ -208,7 +209,7 @@ fn execute_action_functionality(
                 deletions.write(DeleteLogTileRequest(*log_tile));
             }
         }
-        ActionFunctionality::SpawnTower => {
+        ActionFunctionality::SpawnPiece(_) => {
             for log_tile in selected_tiles.as_read_only_list() {
                 piece_spawns.write(SpawnLogPiece {
                     piece_type: super::pieces::BasePieceType::Tower,
@@ -244,11 +245,11 @@ fn evaluate_tiles(
     )>,
     selected_tiles: Res<SelectedLogTiles>,
 ) {
-    let Some(ActionInfo {
+    let Some(GameAction {
         eligibility_method,
         selection_count_bounds,
         ..
-    }) = action.0
+    }) = action.0.clone()
     else {
         return;
     };
@@ -333,6 +334,7 @@ pub struct ActionOrSelectionChanged;
 /// Essentially, it ensures that once a tile is selected, it cannot be deselected unless the selection process resets. Also,
 /// the only way to select a tile is through a special event.
 pub mod dangerous_selection_mechanics {
+
     use crate::backend::game_actions::{
         ActionOrSelectionChanged, CurrentAction, CurrentSource, SetActionTo,
     };
@@ -391,7 +393,7 @@ pub mod dangerous_selection_mechanics {
         mut log_tiles: Query<&mut TileSelectionStatus>,
         mut commands: Commands,
     ) {
-        match *instructions {
+        match instructions.clone() {
             SetActionTo::None => {
                 current_action.0 = None;
                 current_source.0 = None;
@@ -439,7 +441,7 @@ fn validate_execution_request(
     action: Res<CurrentAction>,
     selected_tiles: Res<SelectedLogTiles>,
 ) {
-    let Some(action_info) = action.0 else { return };
+    let Some(action_info) = &action.0 else { return };
 
     let amount_selected = selected_tiles.as_read_only_list().len();
 

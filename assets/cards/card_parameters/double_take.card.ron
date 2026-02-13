@@ -1,7 +1,7 @@
-CardAsset (
+ProxyCard (
     name: "Double take",
     price: 5,
-    action: ActionInfo (
+    action: ProxyAction (
         functionality: DoubleTakeTest,
         eligibility_method: UnoccupiedTiles,
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 2, max_tiles: 2)),

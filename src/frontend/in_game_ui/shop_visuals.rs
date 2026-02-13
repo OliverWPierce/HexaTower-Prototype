@@ -2,7 +2,7 @@ use bevy::{color::palettes::tailwind, prelude::*};
 
 use crate::{
     backend::{
-        cards::{CardAsset, CardRarity},
+        cards::{Card, CardRarity},
         game_parameters::SetUpBoard,
         players::{ActivePlayer, StartTurn},
         shop::{
@@ -230,8 +230,7 @@ fn render_all_panels(
     parent: Single<Entity, With<ShopPanelParent>>,
     active_player: Res<ActivePlayer>,
     player_shop_contents: Query<&PlayerShopSetsInfo>,
-    card_assets: Res<Assets<CardAsset>>,
-    asset_server: ResMut<AssetServer>,
+    card_assets: Res<Assets<Card>>,
     mut commands: Commands,
 ) {
     commands.entity(parent.entity()).despawn_children();
@@ -302,7 +301,6 @@ fn render_all_panels(
 
             for (card_index, card_slot) in set.cards_offered.iter().enumerate() {
                 let Some(card_handle) = card_slot else {
-                    println!("The card slot was empty");
                     continue;
                 };
 
@@ -327,7 +325,7 @@ fn render_all_panels(
                             ..Default::default()
                         },
                         ImageNode {
-                            image: asset_server.load(card_data.image_path.clone()),
+                            image: card_data.image.clone(),
                             color: card_data.rarity.card_color(),
                             ..default()
                         },
@@ -382,8 +380,7 @@ fn inspect_shop_card(
     vis_shop_cards: Query<&RepresentsLogCardOffered>,
     active_player: Res<ActivePlayer>,
     player_shop_contents: Query<&PlayerShopSetsInfo>,
-    card_assets: Res<Assets<CardAsset>>,
-    mut asset_server: ResMut<AssetServer>,
+    card_assets: Res<Assets<Card>>,
     mut commands: Commands,
     inspector: Single<Entity, With<InspectorPanel>>,
 ) {
@@ -411,11 +408,5 @@ fn inspect_shop_card(
         return;
     };
 
-    inspect_card(
-        inspector.entity(),
-        &mut commands,
-        card_data,
-        &mut asset_server,
-        false,
-    );
+    inspect_card(inspector.entity(), &mut commands, card_data, false);
 }

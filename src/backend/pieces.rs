@@ -15,7 +15,7 @@ pub struct PiecesPlugin;
 impl Plugin for PiecesPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<SpawnLogPiece>();
-        app.add_message::<LogPieceSpawned>();
+        app.add_message::<SpawnedLogPieceInfo>();
         app.add_message::<LogPieceDespawned>();
 
         app.add_systems(
@@ -25,14 +25,22 @@ impl Plugin for PiecesPlugin {
     }
 }
 
-#[derive(Debug, Default, TypePath)]
-pub struct PieceAssetLoader;
-
-#[derive(Serialize, Debug, Deserialize, Reflect, Asset, Clone)]
-pub struct PieceAsset {
+#[derive(Debug, Serialize, Reflect, Deserialize)]
+struct ProxyPiece {
     name: String,
     model_path: String,
+    health: u32,
 }
+
+#[derive(Debug, Asset, Clone, TypePath)]
+pub struct Piece {
+    name: String,
+    model: Handle<Scene>,
+    health: u32,
+}
+
+#[derive(Debug, Default, TypePath)]
+pub struct PieceAssetLoader;
 
 #[non_exhaustive]
 #[derive(Debug, Error)]
@@ -46,7 +54,7 @@ pub enum PieceAssetLoaderError {
 }
 
 impl AssetLoader for PieceAssetLoader {
-    type Asset = PieceAsset;
+    type Asset = Piece;
     type Settings = ();
     type Error = PieceAssetLoaderError;
 
@@ -54,12 +62,19 @@ impl AssetLoader for PieceAssetLoader {
         &self,
         reader: &mut dyn bevy::asset::io::Reader,
         _settings: &Self::Settings,
-        _load_context: &mut bevy::asset::LoadContext<'_>,
+        load_context: &mut bevy::asset::LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
-        let card = ron::de::from_bytes::<PieceAsset>(&bytes)?;
-        Ok(card)
+        let proxy = ron::de::from_bytes::<ProxyPiece>(&bytes)?;
+
+        let piece = Piece {
+            name: proxy.name.clone(),
+            model: load_context.load(proxy.model_path),
+            health: proxy.health,
+        };
+
+        Ok(piece)
     }
 
     fn extensions(&self) -> &[&str] {
@@ -67,27 +82,17 @@ impl AssetLoader for PieceAssetLoader {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Component)]
-pub enum BasePieceType {
-    Tower,
-}
-
-impl BasePieceType {
-    fn bundle(&self) -> impl Bundle {
-        match self {
-            BasePieceType::Tower => (Name::new("TowerPiece"), *self),
-        }
-    }
-}
-
-#[derive(Debug, Message, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Message, Clone, PartialEq, PartialOrd)]
 pub struct SpawnLogPiece {
-    pub piece_type: BasePieceType,
+    pub piece: Handle<Piece>,
     pub log_tile: Entity,
 }
 
-#[derive(Debug, Message, Clone, Copy, PartialEq, PartialOrd)]
-pub struct LogPieceSpawned(pub Entity);
+#[derive(Debug, Message, Clone, PartialEq, PartialOrd)]
+pub struct SpawnedLogPieceInfo {
+    enity: Entity,
+    model: Handle<Scene>,
+}
 
 #[derive(Clone, Component, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[relationship(relationship_target = OccupiedByPiece)]
@@ -101,32 +106,46 @@ pub struct OccupiedByPiece {
     log_piece: Entity,
 }
 
+#[derive(Debug, Component)]
+pub struct Health {
+    max_health: u32,
+    current_health: u32,
+}
+
 fn spawn_logpiece(
     mut spawn_requests: MessageReader<SpawnLogPiece>,
     mut commands: Commands,
     occupied_tiles: Query<Entity, With<OccupiedByPiece>>,
-    mut notify_of_spawns: MessageWriter<LogPieceSpawned>,
+    mut notify_of_spawns: MessageWriter<SpawnedLogPieceInfo>,
+    pieces: Res<Assets<Piece>>,
 ) {
-    for SpawnLogPiece {
-        piece_type,
-        log_tile,
-    } in spawn_requests.read()
-    {
+    for SpawnLogPiece { piece, log_tile } in spawn_requests.read() {
         if occupied_tiles.contains(*log_tile) {
             warn!(
                 "A request was sent to spawn a piece on a tile that was already occupied. The request was not fulfilled."
             )
         } else {
+            let Some(piece_instructions) = pieces.get(piece) else {
+                error!("a piece asset was not yet fully loaded.");
+                continue;
+            };
+
             let logpiece_ent = commands
                 .spawn((
-                    piece_type.bundle(),
                     OccupiesTile {
                         log_tile: *log_tile,
+                    },
+                    Health {
+                        max_health: piece_instructions.health,
+                        current_health: piece_instructions.health,
                     },
                 ))
                 .id();
 
-            notify_of_spawns.write(LogPieceSpawned(logpiece_ent));
+            notify_of_spawns.write(SpawnedLogPieceInfo {
+                enity: logpiece_ent,
+                model: piece_instructions.model.clone(),
+            });
         }
     }
 }

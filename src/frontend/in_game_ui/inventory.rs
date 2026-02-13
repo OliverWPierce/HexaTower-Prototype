@@ -1,6 +1,6 @@
 use crate::{
     backend::{
-        cards::{CardAsset, InventoryUpdated, PlayerCardInventory},
+        cards::{Card, InventoryUpdated, PlayerCardInventory},
         game_actions::{ActionOrSelectionChanged, ActionSource, CurrentSource, SetActionTo},
         game_parameters::SetUpBoard,
         players::{ActivePlayer, StartTurn},
@@ -101,8 +101,7 @@ struct CorrespondingInventoryIndex(usize);
 fn load_cards_into_ui(
     active_player: Res<ActivePlayer>,
     inventories: Query<&PlayerCardInventory>,
-    card_assets: Res<Assets<CardAsset>>,
-    asset_server: ResMut<AssetServer>,
+    card_assets: Res<Assets<Card>>,
     mut commands: Commands,
     card_parent_panel: Single<Entity, With<CardHolderPanel>>,
     info_panel: Single<Entity, With<InventoryInfoNode>>,
@@ -145,7 +144,7 @@ fn load_cards_into_ui(
             BorderColor::all(Color::Srgba(tailwind::SLATE_700)),
             children![(
                 ImageNode {
-                    image: asset_server.load(card_data.image_path.clone()),
+                    image: card_data.image.clone(),
                     color: card_data.rarity.card_color(),
                     image_mode: NodeImageMode::Auto,
                     ..Default::default()
@@ -166,7 +165,7 @@ fn load_card_action(
     vis_cards: Query<&CorrespondingInventoryIndex>,
     active_player: Res<ActivePlayer>,
     inventories: Query<&PlayerCardInventory>,
-    card_assets: Res<Assets<CardAsset>>,
+    card_assets: Res<Assets<Card>>,
     source: Res<CurrentSource>,
     mut commands: Commands,
 ) {
@@ -195,7 +194,7 @@ fn load_card_action(
         commands.trigger(SetActionTo::None);
     } else {
         commands.trigger(SetActionTo::Action {
-            action: card_data.action,
+            action: card_data.action.clone(),
             source: ActionSource::Card {
                 inventory_index: *index,
             },
@@ -238,8 +237,7 @@ fn inspect_inventory_cards(
     vis_cards: Query<&CorrespondingInventoryIndex>,
     active_player: Res<ActivePlayer>,
     inventories: Query<&PlayerCardInventory>,
-    card_assets: Res<Assets<CardAsset>>,
-    mut asset_server: ResMut<AssetServer>,
+    card_assets: Res<Assets<Card>>,
     mut commands: Commands,
 ) {
     let Ok(CorrespondingInventoryIndex(index)) = vis_cards.get(hover.entity) else {
@@ -261,11 +259,5 @@ fn inspect_inventory_cards(
         return;
     };
 
-    inspect_card(
-        inspector.entity(),
-        &mut commands,
-        card_data,
-        &mut asset_server,
-        true,
-    );
+    inspect_card(inspector.entity(), &mut commands, card_data, true);
 }

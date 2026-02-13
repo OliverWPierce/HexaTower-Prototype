@@ -90,7 +90,7 @@ fn update_button(
     button: Single<(Entity, &mut BackgroundColor, &mut BorderColor), With<ExecuteActionButton>>,
     mut commands: Commands,
 ) {
-    if let Some(action) = action.0 {
+    if let Some(action) = &action.0 {
         let (button_ent, mut background, mut border) = button.into_inner();
 
         let Some(source) = action_soruce.0 else {
@@ -171,7 +171,7 @@ fn send_execute_actions(
     currently_selected: Res<SelectedLogTiles>,
 ) {
     if click.entity == execute_button.into_inner()
-        && let Some(action) = action.0
+        && let Some(action) = &action.0
         && currently_selected.as_read_only_list().len() <= action.bounds().max_tiles
         && currently_selected.as_read_only_list().len() >= action.bounds().min_tiles
     {

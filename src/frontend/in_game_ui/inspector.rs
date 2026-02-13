@@ -4,7 +4,7 @@ use bevy::{
 };
 
 use crate::{
-    backend::{cards::CardAsset, game_parameters::SetUpBoard},
+    backend::{cards::Card, game_parameters::SetUpBoard},
     frontend::in_game_ui::{RightPanelEnt, execute_action_button},
 };
 
@@ -50,13 +50,7 @@ fn clear_inspector_panel(
     commands.entity(inspector.entity()).despawn_children();
 }
 
-pub fn inspect_card(
-    inspector: Entity,
-    commands: &mut Commands,
-    card_data: &CardAsset,
-    asset_server: &mut AssetServer,
-    owned: bool,
-) {
+pub fn inspect_card(inspector: Entity, commands: &mut Commands, card_data: &Card, owned: bool) {
     commands.entity(inspector.entity()).despawn_children();
 
     commands.spawn((
@@ -163,7 +157,7 @@ pub fn inspect_card(
         BorderColor::all(Color::Srgba(SLATE_900)),
         children![(
             ImageNode {
-                image: asset_server.load(card_data.image_path.clone()),
+                image: card_data.image.clone(),
                 color: card_data.rarity.card_color(),
                 image_mode: NodeImageMode::Auto,
                 ..Default::default()

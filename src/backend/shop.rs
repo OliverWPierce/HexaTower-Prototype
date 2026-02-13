@@ -3,7 +3,7 @@ use rand::seq::{IndexedRandom, IteratorRandom};
 
 use crate::backend::{
     BackEndSystems,
-    cards::{CardAsset, InventoryUpdated, PlayerCardInventory, SortedCardHandles},
+    cards::{Card, InventoryUpdated, PlayerCardInventory, SortedCardHandles},
     game_parameters::SetUpBoard,
     players::{ActivePlayer, PlayerMarker, StartTurn, create_basic_players},
 };
@@ -31,7 +31,7 @@ pub struct PlayerShopSetsInfo {
 }
 #[derive(Debug, Default, Clone)]
 pub struct ShopOfferSet {
-    pub cards_offered: [Option<Handle<CardAsset>>; 3],
+    pub cards_offered: [Option<Handle<Card>>; 3],
     pub turns_until_auto_restock: u32,
     auto_restock_cooldown: u32,
 }
@@ -227,7 +227,7 @@ fn manage_purchase_requests(
         &mut PlayerCardInventory,
     )>,
     active_player: Res<ActivePlayer>,
-    card_assets: Res<Assets<CardAsset>>,
+    card_assets: Res<Assets<Card>>,
 ) {
     let Ok((mut coin_bag, mut shop_offers_info, mut player_inventory)) =
         players.get_mut(active_player.0)

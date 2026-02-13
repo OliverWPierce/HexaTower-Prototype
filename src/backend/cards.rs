@@ -8,21 +8,56 @@ use thiserror::Error;
 
 use crate::backend::{
     BackEndSystems,
-    game_actions::{ActionInfo, CurrentSource, ExecuteSelectedAction},
+    game_actions::{
+        ActionFunctionality, CurrentSource, EligibilityDeterminationMethod, ExecuteSelectedAction,
+        GameAction, GameDesignBounds,
+    },
     game_parameters::SetUpBoard,
     players::{ActivePlayer, PlayerMarker, create_basic_players},
 };
 
 use super::game_actions::ActionSource;
 
-#[derive(Debug, Asset, Reflect, Serialize, Deserialize, Clone)]
-pub struct CardAsset {
+#[derive(Debug, Asset, Clone, TypePath)]
+pub struct Card {
     pub name: String,
     pub price: u32,
-    pub action: ActionInfo,
+    pub action: GameAction,
+    pub image: Handle<Image>,
+    pub rarity: CardRarity,
+    pub description: String,
+}
+#[derive(Debug, Deserialize, Serialize, Reflect, Clone)]
+struct ProxyCard {
+    pub name: String,
+    pub price: u32,
+    pub action: ProxyAction,
     pub image_path: String,
     pub rarity: CardRarity,
     pub description: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Reflect, Clone)]
+struct ProxyAction {
+    functionality: ProxyActionFunctionality,
+    eligibility_method: ProxyDeterminationMethod,
+    selection_count_bounds: GameDesignBounds,
+}
+#[derive(Debug, Deserialize, Serialize, Reflect, Clone)]
+enum ProxyActionFunctionality {
+    DeleteTile,
+    SpawnPiece { path_to_proxy_piece: String },
+    DoubleTakeTest,
+    AlterCoinCount(i32),
+}
+
+#[derive(Debug, Deserialize, Serialize, Reflect, Clone, Copy)]
+enum ProxyDeterminationMethod {
+    AllTiles,
+    AllPieces,
+    UnoccupiedTiles,
+    PieceChain,
+    None,
 }
 
 #[derive(Debug, Reflect, Serialize, Deserialize, Clone, Copy)]
@@ -48,7 +83,7 @@ pub enum CardAssetLoaderError {
 }
 
 impl AssetLoader for CardAssetLoader {
-    type Asset = CardAsset;
+    type Asset = Card;
     type Settings = ();
     type Error = CardAssetLoaderError;
 
@@ -56,12 +91,49 @@ impl AssetLoader for CardAssetLoader {
         &self,
         reader: &mut dyn bevy::asset::io::Reader,
         _settings: &Self::Settings,
-        _load_context: &mut bevy::asset::LoadContext<'_>,
+        load_context: &mut bevy::asset::LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
-        let card = ron::de::from_bytes::<CardAsset>(&bytes)?;
-        Ok(card)
+        let proxy = ron::de::from_bytes::<ProxyCard>(&bytes)?;
+
+        let image_handle: Handle<Image> = load_context.load(proxy.image_path);
+
+        let converted_action_func = match proxy.action.functionality {
+            ProxyActionFunctionality::DeleteTile => ActionFunctionality::DeleteTile,
+            ProxyActionFunctionality::SpawnPiece {
+                path_to_proxy_piece,
+            } => ActionFunctionality::SpawnPiece(load_context.load(path_to_proxy_piece)),
+            ProxyActionFunctionality::DoubleTakeTest => ActionFunctionality::DoubleTakeTest,
+            ProxyActionFunctionality::AlterCoinCount(change) => {
+                ActionFunctionality::AlterCoinCount(change)
+            }
+        };
+
+        let converted_action_method = match proxy.action.eligibility_method {
+            ProxyDeterminationMethod::AllTiles => EligibilityDeterminationMethod::AllTiles,
+            ProxyDeterminationMethod::AllPieces => EligibilityDeterminationMethod::AllPieces,
+            ProxyDeterminationMethod::UnoccupiedTiles => {
+                EligibilityDeterminationMethod::UnoccupiedTiles
+            }
+            ProxyDeterminationMethod::PieceChain => EligibilityDeterminationMethod::PieceChain,
+            ProxyDeterminationMethod::None => EligibilityDeterminationMethod::None,
+        };
+
+        let true_card_action = GameAction {
+            functionality: converted_action_func,
+            eligibility_method: converted_action_method,
+            selection_count_bounds: proxy.action.selection_count_bounds,
+        };
+
+        Ok(Card {
+            name: proxy.name,
+            price: proxy.price,
+            action: true_card_action,
+            image: image_handle,
+            rarity: proxy.rarity,
+            description: proxy.description.clone(),
+        })
     }
 
     fn extensions(&self) -> &[&str] {
@@ -76,7 +148,7 @@ impl Plugin for CardsPlugin {
         app.init_resource::<SortedCardHandles>();
         app.init_resource::<CardFolderAsset>();
 
-        app.init_asset::<CardAsset>();
+        app.init_asset::<Card>();
         app.init_asset_loader::<CardAssetLoader>();
 
         app.add_systems(Startup, open_card_folder);
@@ -99,11 +171,11 @@ impl Plugin for CardsPlugin {
 
 #[derive(Debug, Resource, Default)]
 pub struct SortedCardHandles {
-    pub all_cards: Vec<Handle<CardAsset>>,
-    pub legendary_cards: Vec<Handle<CardAsset>>,
-    pub epic_cards: Vec<Handle<CardAsset>>,
-    pub rare_cards: Vec<Handle<CardAsset>>,
-    pub common_cards: Vec<Handle<CardAsset>>,
+    pub all_cards: Vec<Handle<Card>>,
+    pub legendary_cards: Vec<Handle<Card>>,
+    pub epic_cards: Vec<Handle<Card>>,
+    pub rare_cards: Vec<Handle<Card>>,
+    pub common_cards: Vec<Handle<Card>>,
 }
 
 #[derive(Resource, Debug, Default)]
@@ -118,8 +190,8 @@ fn open_card_folder(
 
 fn validate_and_sort_newly_loaded_cards(
     mut sorted_cards: ResMut<SortedCardHandles>,
-    mut asset_events: MessageReader<AssetEvent<CardAsset>>,
-    mut cards: ResMut<Assets<CardAsset>>,
+    mut asset_events: MessageReader<AssetEvent<Card>>,
+    mut cards: ResMut<Assets<Card>>,
 ) {
     for asset_event in asset_events.read() {
         match asset_event {
@@ -157,11 +229,11 @@ fn validate_and_sort_newly_loaded_cards(
 #[derive(Debug, Component)]
 pub struct PlayerCardInventory {
     pub max_size: usize,
-    pub cards: Vec<Handle<CardAsset>>,
+    pub cards: Vec<Handle<Card>>,
 }
 
 impl PlayerCardInventory {
-    pub fn add_card_succeeds(&mut self, card: Handle<CardAsset>) -> bool {
+    pub fn add_card_succeeds(&mut self, card: Handle<Card>) -> bool {
         if self.cards.len() < self.max_size {
             self.cards.push(card);
             true
@@ -174,15 +246,15 @@ impl PlayerCardInventory {
 fn initialize_player_inventories(
     players: Query<Entity, With<PlayerMarker>>,
     mut commands: Commands,
-    asset_server: ResMut<AssetServer>,
+    // asset_server: ResMut<AssetServer>,
 ) {
-    let tower_spawn_card_handle: Handle<CardAsset> =
-        asset_server.load("cards/card_parameters/tower_genesis.card.ron");
+    // let tower_spawn_card_handle: Handle<Card> =
+    //     asset_server.load("cards/card_parameters/tower_genesis.card.ron");
 
     for player in players {
         commands.entity(player).insert(PlayerCardInventory {
             max_size: 5,
-            cards: vec![tower_spawn_card_handle.clone()],
+            cards: Vec::new(),
         });
     }
 }

@@ -1,7 +1,7 @@
-CardAsset (
+ProxyCard (
     name: "Windfall",
     price: 1,
-    action: ActionInfo (
+    action: ProxyAction (
         functionality: AlterCoinCount(20),
         eligibility_method: None,
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 0, max_tiles: 0)),
