@@ -1,0 +1,14 @@
+ProxyCard (
+    name: "Rolling Rover Genesis",
+    price: 2,
+    action: ProxyAction (
+        functionality: SpawnPiece(
+            path_to_proxy_piece: "pieces/piece_parameters/rover.piece.ron",
+        ),
+        eligibility_method: UnoccupiedTiles,
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 2, max_tiles: 2)),
+        ),
+    image_path: "cards/card_images/GoldProjectiles.png",
+    rarity: Epic,
+    description: "Spawn Two commands points on any unnoccupied tile."
+)

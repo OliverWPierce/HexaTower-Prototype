@@ -1,0 +1,5 @@
+ProxyPiece (
+    name: "imposing obelisk",
+    model_path: "pieces/piece_models/Obelisk.glb",
+    health: 20,
+)

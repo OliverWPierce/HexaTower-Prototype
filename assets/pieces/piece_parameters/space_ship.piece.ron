@@ -1,0 +1,5 @@
+ProxyPiece (
+    name: "The Centienial Hawk",
+    model_path: "pieces/piece_models/Cosmic Cargo Spaceship.glb",
+    health: 16,
+)

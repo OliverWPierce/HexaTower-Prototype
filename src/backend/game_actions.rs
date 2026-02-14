@@ -63,7 +63,7 @@ pub struct ClearBackendData;
 pub enum ActionFunctionality {
     DeleteTile,
     SpawnPiece(Handle<Piece>),
-    DoubleTakeTest,
+    DoubleTakeTest(Handle<Piece>),
     AlterCoinCount(i32),
 }
 
@@ -137,7 +137,7 @@ impl SelectionBounds for ActionFunctionality {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
-            ActionFunctionality::DoubleTakeTest => Bounds {
+            ActionFunctionality::DoubleTakeTest(_) => Bounds {
                 min_tiles: 2,
                 max_tiles: 2,
             },
@@ -209,20 +209,20 @@ fn execute_action_functionality(
                 deletions.write(DeleteLogTileRequest(*log_tile));
             }
         }
-        ActionFunctionality::SpawnPiece(_) => {
+        ActionFunctionality::SpawnPiece(piece) => {
             for log_tile in selected_tiles.as_read_only_list() {
                 piece_spawns.write(SpawnLogPiece {
-                    piece_type: super::pieces::BasePieceType::Tower,
+                    piece: piece.clone(),
                     log_tile: *log_tile,
                 });
             }
         }
-        ActionFunctionality::DoubleTakeTest => {
+        ActionFunctionality::DoubleTakeTest(piece) => {
             deletions.write(DeleteLogTileRequest(
                 *(selected_tiles.as_read_only_list().get(1).unwrap()),
             ));
             piece_spawns.write(SpawnLogPiece {
-                piece_type: super::pieces::BasePieceType::Tower,
+                piece: piece.clone(),
                 log_tile: *selected_tiles.as_read_only_list().first().unwrap(),
             });
         }

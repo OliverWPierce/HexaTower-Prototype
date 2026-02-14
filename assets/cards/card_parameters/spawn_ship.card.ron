@@ -1,0 +1,14 @@
+ProxyCard (
+    name: "Spaceship Genesis",
+    price: 7,
+    action: ProxyAction (
+        functionality: SpawnPiece(
+            path_to_proxy_piece: "pieces/piece_parameters/space_ship.piece.ron",
+        ),
+        eligibility_method: UnoccupiedTiles,
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
+        ),
+    image_path: "cards/card_images/RedDowngrade.png",
+    rarity: Legendary,
+    description: "Spawn one ship onto unnoccupied tile."
+)

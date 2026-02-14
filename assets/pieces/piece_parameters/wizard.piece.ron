@@ -1,0 +1,5 @@
+ProxyPiece (
+    name: "Gandaldore",
+    model_path: "pieces/piece_models/Wizard Hat.glb",
+    health: 4,
+)

@@ -1,0 +1,5 @@
+ProxyPiece (
+    name: "Rolling Saucer",
+    model_path: "pieces/piece_models/Magnetic Hockey Rover.glb",
+    health: 12,
+)

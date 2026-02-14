@@ -47,7 +47,7 @@ struct ProxyAction {
 enum ProxyActionFunctionality {
     DeleteTile,
     SpawnPiece { path_to_proxy_piece: String },
-    DoubleTakeTest,
+    DoubleTakeTest { path_to_proxy_piece: String },
     AlterCoinCount(i32),
 }
 
@@ -104,7 +104,9 @@ impl AssetLoader for CardAssetLoader {
             ProxyActionFunctionality::SpawnPiece {
                 path_to_proxy_piece,
             } => ActionFunctionality::SpawnPiece(load_context.load(path_to_proxy_piece)),
-            ProxyActionFunctionality::DoubleTakeTest => ActionFunctionality::DoubleTakeTest,
+            ProxyActionFunctionality::DoubleTakeTest {
+                path_to_proxy_piece,
+            } => ActionFunctionality::DoubleTakeTest(load_context.load(path_to_proxy_piece)),
             ProxyActionFunctionality::AlterCoinCount(change) => {
                 ActionFunctionality::AlterCoinCount(change)
             }

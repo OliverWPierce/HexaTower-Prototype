@@ -18,6 +18,9 @@ impl Plugin for PiecesPlugin {
         app.add_message::<SpawnedLogPieceInfo>();
         app.add_message::<LogPieceDespawned>();
 
+        app.init_asset::<Piece>();
+        app.init_asset_loader::<PieceAssetLoader>();
+
         app.add_systems(
             Update,
             (spawn_logpiece, send_despawn_notifications).in_set(BackEndSystems),
@@ -70,7 +73,7 @@ impl AssetLoader for PieceAssetLoader {
 
         let piece = Piece {
             name: proxy.name.clone(),
-            model: load_context.load(proxy.model_path),
+            model: load_context.load(GltfAssetLabel::Scene(0).from_asset(proxy.model_path)),
             health: proxy.health,
         };
 
@@ -90,8 +93,8 @@ pub struct SpawnLogPiece {
 
 #[derive(Debug, Message, Clone, PartialEq, PartialOrd)]
 pub struct SpawnedLogPieceInfo {
-    enity: Entity,
-    model: Handle<Scene>,
+    pub log_piece_entity: Entity,
+    pub model: Handle<Scene>,
 }
 
 #[derive(Clone, Component, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -143,7 +146,7 @@ fn spawn_logpiece(
                 .id();
 
             notify_of_spawns.write(SpawnedLogPieceInfo {
-                enity: logpiece_ent,
+                log_piece_entity: logpiece_ent,
                 model: piece_instructions.model.clone(),
             });
         }

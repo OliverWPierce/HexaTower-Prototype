@@ -2,7 +2,9 @@ ProxyCard (
     name: "Double take",
     price: 5,
     action: ProxyAction (
-        functionality: DoubleTakeTest,
+        functionality: DoubleTakeTest(
+            path_to_proxy_piece: "pieces/piece_parameters/obelisk_of_doom.piece.ron",
+        ),
         eligibility_method: UnoccupiedTiles,
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 2, max_tiles: 2)),
         ),

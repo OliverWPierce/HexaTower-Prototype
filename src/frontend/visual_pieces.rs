@@ -2,8 +2,7 @@ use bevy::{prelude::*, time::Stopwatch};
 
 use crate::{
     backend::{
-        game_parameters::SetUpBoard,
-        pieces::{BasePieceType, LogPieceDespawned, OccupiesTile, SpawnedLogPieceInfo},
+        pieces::{LogPieceDespawned, OccupiesTile, SpawnedLogPieceInfo},
         players::ActivePlayer,
         tiles::LogicalTileLocation,
     },
@@ -17,7 +16,6 @@ pub struct VisPiecesPlugin;
 
 impl Plugin for VisPiecesPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(SetUpBoard, initialize_piece_model_handles);
         app.add_systems(
             Update,
             (
@@ -30,19 +28,8 @@ impl Plugin for VisPiecesPlugin {
     }
 }
 
-#[derive(Resource, Clone)]
-struct PieceModelHandles {
-    tower: Handle<Scene>,
-}
 #[derive(Debug, Component)]
 pub struct VisPieceOf(pub Entity);
-
-fn initialize_piece_model_handles(mut commands: Commands, asset_server: ResMut<AssetServer>) {
-    commands.insert_resource(PieceModelHandles {
-        tower: asset_server
-            .load(GltfAssetLabel::Scene(0).from_asset("pieces/piece_models/Obelisk.glb")),
-    });
-}
 
 #[derive(Debug, Component)]
 struct AnimationStopwatch {
@@ -54,22 +41,21 @@ const PIECE_BASEPLATE_THICKNESS: f32 = 0.113;
 
 fn spawn_peice_visuals(
     mut new_log_spawns: MessageReader<SpawnedLogPieceInfo>,
-    mesh_handles: Res<PieceModelHandles>,
-    log_pieces: Query<(&BasePieceType, &OccupiesTile)>,
+    log_pieces: Query<&OccupiesTile>,
     log_tile_location: Query<&LogicalTileLocation>,
     active_player: Res<ActivePlayer>,
     base_plates: Query<(&DataForPlayer, &PieceBasePlateModel)>,
     asset_server: ResMut<AssetServer>,
     mut commands: Commands,
 ) {
-    for SpawnedLogPieceInfo(log_piece) in new_log_spawns.read() {
-        let (piece_type, log_occupied) = log_pieces
-            .get(*log_piece)
+    for SpawnedLogPieceInfo {
+        log_piece_entity,
+        model,
+    } in new_log_spawns.read()
+    {
+        let (log_occupied) = log_pieces
+            .get(*log_piece_entity)
             .expect("A logical piece spawned message did not contain a logical piece");
-
-        let handle = match piece_type {
-            BasePieceType::Tower => mesh_handles.tower.clone(),
-        };
 
         let physical_position = log_tile_location
             .get(log_occupied.log_tile)
@@ -94,13 +80,13 @@ fn spawn_peice_visuals(
                 scale: Vec3::ZERO,
                 ..Default::default()
             },
-            VisPieceOf(*log_piece),
+            VisPieceOf(*log_piece_entity),
             AnimationStopwatch {
                 elapsed: Stopwatch::new(),
                 scale_in: true,
             },
             children![(
-                SceneRoot(handle),
+                SceneRoot(model.clone()),
                 Transform {
                     translation: Vec3::new(0.0, PIECE_BASEPLATE_THICKNESS, 0.0),
                     scale: Vec3::ONE,
