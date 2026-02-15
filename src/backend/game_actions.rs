@@ -6,7 +6,7 @@ use crate::backend::{
     game_actions::dangerous_selection_mechanics::{SelectedLogTiles, TileSelectionStatus},
     game_parameters::SetUpBoard,
     pieces::{OccupiedByPiece, Piece, SpawnLogPiece},
-    players::StartTurn,
+    players::{ActivePlayer, StartTurn},
     shop::ChangeActivePlayerCoinsBy,
     tiles::{
         AdjacentTiles, DeleteLogTileRequest, EssentialTileCreationSystems, LogicalTileCreated,
@@ -195,6 +195,7 @@ fn insert_selection_data(mut new_tiles: MessageReader<LogicalTileCreated>, mut c
 fn execute_action_functionality(
     action: Res<CurrentAction>,
     selected_tiles: Res<SelectedLogTiles>,
+    active_plyer: Res<ActivePlayer>,
     mut deletions: MessageWriter<DeleteLogTileRequest>,
     mut piece_spawns: MessageWriter<SpawnLogPiece>,
     mut commands: Commands,
@@ -212,6 +213,7 @@ fn execute_action_functionality(
         ActionFunctionality::SpawnPiece(piece) => {
             for log_tile in selected_tiles.as_read_only_list() {
                 piece_spawns.write(SpawnLogPiece {
+                    player: active_plyer.0,
                     piece: piece.clone(),
                     log_tile: *log_tile,
                 });
@@ -222,6 +224,7 @@ fn execute_action_functionality(
                 *(selected_tiles.as_read_only_list().get(1).unwrap()),
             ));
             piece_spawns.write(SpawnLogPiece {
+                player: active_plyer.0,
                 piece: piece.clone(),
                 log_tile: *selected_tiles.as_read_only_list().first().unwrap(),
             });

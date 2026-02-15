@@ -37,9 +37,9 @@ struct ProxyPiece {
 
 #[derive(Debug, Asset, Clone, TypePath)]
 pub struct Piece {
-    name: String,
-    model: Handle<Scene>,
-    health: u32,
+    pub name: String,
+    pub model: Handle<Scene>,
+    pub health: u32,
 }
 
 #[derive(Debug, Default, TypePath)]
@@ -88,13 +88,14 @@ impl AssetLoader for PieceAssetLoader {
 #[derive(Debug, Message, Clone, PartialEq, PartialOrd)]
 pub struct SpawnLogPiece {
     pub piece: Handle<Piece>,
+    pub player: Entity,
     pub log_tile: Entity,
 }
 
 #[derive(Debug, Message, Clone, PartialEq, PartialOrd)]
 pub struct SpawnedLogPieceInfo {
     pub log_piece_entity: Entity,
-    pub model: Handle<Scene>,
+    pub from_asset: Handle<Piece>,
 }
 
 #[derive(Clone, Component, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -109,10 +110,18 @@ pub struct OccupiedByPiece {
     log_piece: Entity,
 }
 
+#[derive(Component)]
+#[relationship_target(relationship = LogPieceOwnedByPlayer, linked_spawn)]
+pub struct OwnsLogPieces(Vec<Entity>);
+
+#[derive(Component)]
+#[relationship(relationship_target = OwnsLogPieces)]
+pub struct LogPieceOwnedByPlayer(pub Entity);
+
 #[derive(Debug, Component)]
 pub struct Health {
-    max_health: u32,
-    current_health: u32,
+    pub max_health: u32,
+    pub current_health: u32,
 }
 
 fn spawn_logpiece(
@@ -122,7 +131,12 @@ fn spawn_logpiece(
     mut notify_of_spawns: MessageWriter<SpawnedLogPieceInfo>,
     pieces: Res<Assets<Piece>>,
 ) {
-    for SpawnLogPiece { piece, log_tile } in spawn_requests.read() {
+    for SpawnLogPiece {
+        piece,
+        player,
+        log_tile,
+    } in spawn_requests.read()
+    {
         if occupied_tiles.contains(*log_tile) {
             warn!(
                 "A request was sent to spawn a piece on a tile that was already occupied. The request was not fulfilled."
@@ -135,6 +149,7 @@ fn spawn_logpiece(
 
             let logpiece_ent = commands
                 .spawn((
+                    LogPieceOwnedByPlayer(*player),
                     OccupiesTile {
                         log_tile: *log_tile,
                     },
@@ -147,7 +162,7 @@ fn spawn_logpiece(
 
             notify_of_spawns.write(SpawnedLogPieceInfo {
                 log_piece_entity: logpiece_ent,
-                model: piece_instructions.model.clone(),
+                from_asset: piece.clone(),
             });
         }
     }

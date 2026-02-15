@@ -4,8 +4,16 @@ use bevy::{
 };
 
 use crate::{
-    backend::{cards::Card, game_parameters::SetUpBoard},
-    frontend::in_game_ui::{RightPanelEnt, execute_action_button},
+    backend::{
+        cards::Card,
+        game_parameters::SetUpBoard,
+        pieces::{Health, LogPieceOwnedByPlayer},
+    },
+    frontend::{
+        in_game_ui::{RightPanelEnt, execute_action_button},
+        visual_pieces::{PieceName, VisPieceOf},
+        visual_player_data::{DataForPlayer, DisplayName},
+    },
 };
 
 pub struct InspectorPlugin;
@@ -17,6 +25,7 @@ impl Plugin for InspectorPlugin {
             create_inspector_panel.after(execute_action_button::add_button),
         );
         app.add_observer(clear_inspector_panel);
+        app.add_observer(inspect_piece);
     }
 }
 
@@ -188,4 +197,98 @@ pub fn inspect_card(inspector: Entity, commands: &mut Commands, card_data: &Card
             },
         )],
     ));
+}
+
+fn inspect_piece(
+    over: On<Pointer<Over>>,
+    mut commands: Commands,
+    inspector: Single<Entity, With<InspectorPanel>>,
+    vis_pieces: Query<(&VisPieceOf, &PieceName)>,
+    log_pieces: Query<(&Health, &LogPieceOwnedByPlayer)>,
+    player_vis_data: Query<(&DisplayName, &DataForPlayer)>,
+) {
+    let Ok((log_piece_ent, name)) = vis_pieces.get(over.entity) else {
+        return;
+    };
+
+    let Ok((health_data, commanding_player)) = log_pieces.get(log_piece_ent.0) else {
+        error!("The visual piece did not point to a logical piece");
+        return;
+    };
+
+    let inspector = inspector.entity();
+
+    commands.entity(inspector).despawn_children();
+
+    commands.spawn((
+        ChildOf(inspector),
+        Node {
+            width: Val::Percent(90.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        children![(
+            Text::new(name.0.clone()),
+            TextFont {
+                font_size: 36.0,
+                ..default()
+            }
+        )],
+    ));
+
+    for (player_name, player) in player_vis_data {
+        if commanding_player.0 != player.0 {
+            continue;
+        }
+
+        commands.spawn((
+            ChildOf(inspector),
+            Node {
+                width: Val::Percent(90.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            children![(
+                Text::new(format!("Commander: {}", player_name.0.clone())),
+                TextFont {
+                    font_size: 24.0,
+                    ..default()
+                }
+            )],
+        ));
+        break;
+    }
+
+    let health_panel = commands
+        .spawn((
+            ChildOf(inspector),
+            Node {
+                height: Val::Percent(20.0),
+                width: Val::Percent(90.0),
+                border: UiRect::all(Val::Percent(0.5)),
+                justify_content: JustifyContent::SpaceAround,
+                align_items: AlignItems::Center,
+                flex_direction: FlexDirection::Column,
+                ..Default::default()
+            },
+            BorderRadius::all(Val::Px(15.0)),
+            BorderColor::all(Color::Srgba(SLATE_800)),
+        ))
+        .id();
+
+    commands.spawn((
+        ChildOf(health_panel),
+        Text::new(format!(
+            "{}/{} Hp",
+            health_data.current_health, health_data.max_health
+        )),
+        TextFont {
+            font_size: 24.0,
+            ..default()
+        },
+    ));
+
+    commands.spawn((ChildOf(inspector),));
 }

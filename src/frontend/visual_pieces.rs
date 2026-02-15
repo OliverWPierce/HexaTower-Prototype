@@ -2,8 +2,10 @@ use bevy::{prelude::*, time::Stopwatch};
 
 use crate::{
     backend::{
-        pieces::{LogPieceDespawned, OccupiesTile, SpawnedLogPieceInfo},
-        players::ActivePlayer,
+        game_parameters::SetUpBoard,
+        pieces::{
+            LogPieceDespawned, LogPieceOwnedByPlayer, OccupiesTile, Piece, SpawnedLogPieceInfo,
+        },
         tiles::LogicalTileLocation,
     },
     frontend::{
@@ -25,11 +27,24 @@ impl Plugin for VisPiecesPlugin {
             )
                 .in_set(FrontEndSystems),
         );
+
+        app.add_systems(SetUpBoard, initialize_vis_error_model);
     }
+}
+#[derive(Debug, Resource)]
+pub struct VisError3DModel(pub Handle<Scene>);
+
+fn initialize_vis_error_model(mut commands: Commands, asset_server: ResMut<AssetServer>) {
+    commands.insert_resource(VisError3DModel(
+        asset_server.load(GltfAssetLabel::Scene(0).from_asset("VisualError3d.glb")),
+    ));
 }
 
 #[derive(Debug, Component)]
 pub struct VisPieceOf(pub Entity);
+
+#[derive(Debug, Component)]
+pub struct PieceName(pub String);
 
 #[derive(Debug, Component)]
 struct AnimationStopwatch {
@@ -41,19 +56,19 @@ const PIECE_BASEPLATE_THICKNESS: f32 = 0.113;
 
 fn spawn_peice_visuals(
     mut new_log_spawns: MessageReader<SpawnedLogPieceInfo>,
-    log_pieces: Query<&OccupiesTile>,
+    log_pieces: Query<(&OccupiesTile, &LogPieceOwnedByPlayer)>,
     log_tile_location: Query<&LogicalTileLocation>,
-    active_player: Res<ActivePlayer>,
-    base_plates: Query<(&DataForPlayer, &PieceBasePlateModel)>,
-    asset_server: ResMut<AssetServer>,
+    base_plates: Query<(&PieceBasePlateModel, &DataForPlayer)>,
+    pieces: Res<Assets<Piece>>,
+    vis_error_3d: Res<VisError3DModel>,
     mut commands: Commands,
 ) {
     for SpawnedLogPieceInfo {
         log_piece_entity,
-        model,
+        from_asset: piece,
     } in new_log_spawns.read()
     {
-        let (log_occupied) = log_pieces
+        let (log_occupied, commanding_player) = log_pieces
             .get(*log_piece_entity)
             .expect("A logical piece spawned message did not contain a logical piece");
 
@@ -62,19 +77,23 @@ fn spawn_peice_visuals(
             .expect("the logical piece did not occupy a logical tile with a logical location.")
             .read();
 
-        let mut base_plate_model: Handle<Scene> =
-            asset_server.load(GltfAssetLabel::Scene(0).from_asset("VisualError3d.glb"));
+        let mut base_plate_model = &vis_error_3d.0;
 
-        for (player_represented, plate_model) in base_plates.iter() {
-            if active_player.0 != player_represented.0 {
+        for (base_plate, player) in base_plates {
+            if player.0 != commanding_player.0 {
                 continue;
+            } else {
+                base_plate_model = &base_plate.0
             }
-            base_plate_model = plate_model.0.clone();
-            break;
         }
 
+        let Some(piece_instructions) = pieces.get(piece) else {
+            error!("a piece asset was not yet fully loaded.");
+            continue;
+        };
+
         commands.spawn((
-            SceneRoot(base_plate_model),
+            SceneRoot(base_plate_model.clone()),
             Transform {
                 translation: Vec3::new(physical_position.x, 0.0, physical_position.y),
                 scale: Vec3::ZERO,
@@ -85,8 +104,9 @@ fn spawn_peice_visuals(
                 elapsed: Stopwatch::new(),
                 scale_in: true,
             },
+            PieceName(piece_instructions.name.clone()),
             children![(
-                SceneRoot(model.clone()),
+                SceneRoot(piece_instructions.model.clone()),
                 Transform {
                     translation: Vec3::new(0.0, PIECE_BASEPLATE_THICKNESS, 0.0),
                     scale: Vec3::ONE,
