@@ -8,10 +8,7 @@ use thiserror::Error;
 
 use crate::backend::{
     BackEndSystems,
-    game_actions::{
-        ActionFunctionality, CurrentSource, EligibilityDeterminationMethod, ExecuteSelectedAction,
-        GameAction, GameDesignBounds,
-    },
+    game_actions::{CurrentSource, ExecuteSelectedAction, GameAction, ProxyAction},
     game_parameters::SetUpBoard,
     players::{ActivePlayer, PlayerMarker, create_basic_players},
 };
@@ -35,29 +32,6 @@ struct ProxyCard {
     pub image_path: String,
     pub rarity: CardRarity,
     pub description: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, Reflect, Clone)]
-struct ProxyAction {
-    functionality: ProxyActionFunctionality,
-    eligibility_method: ProxyDeterminationMethod,
-    selection_count_bounds: GameDesignBounds,
-}
-#[derive(Debug, Deserialize, Serialize, Reflect, Clone)]
-enum ProxyActionFunctionality {
-    DeleteTile,
-    SpawnPiece { path_to_proxy_piece: String },
-    DoubleTakeTest { path_to_proxy_piece: String },
-    AlterCoinCount(i32),
-}
-
-#[derive(Debug, Deserialize, Serialize, Reflect, Clone, Copy)]
-enum ProxyDeterminationMethod {
-    AllTiles,
-    AllPieces,
-    UnoccupiedTiles,
-    PieceChain,
-    None,
 }
 
 #[derive(Debug, Reflect, Serialize, Deserialize, Clone, Copy)]
@@ -99,39 +73,10 @@ impl AssetLoader for CardAssetLoader {
 
         let image_handle: Handle<Image> = load_context.load(proxy.image_path);
 
-        let converted_action_func = match proxy.action.functionality {
-            ProxyActionFunctionality::DeleteTile => ActionFunctionality::DeleteTile,
-            ProxyActionFunctionality::SpawnPiece {
-                path_to_proxy_piece,
-            } => ActionFunctionality::SpawnPiece(load_context.load(path_to_proxy_piece)),
-            ProxyActionFunctionality::DoubleTakeTest {
-                path_to_proxy_piece,
-            } => ActionFunctionality::DoubleTakeTest(load_context.load(path_to_proxy_piece)),
-            ProxyActionFunctionality::AlterCoinCount(change) => {
-                ActionFunctionality::AlterCoinCount(change)
-            }
-        };
-
-        let converted_action_method = match proxy.action.eligibility_method {
-            ProxyDeterminationMethod::AllTiles => EligibilityDeterminationMethod::AllTiles,
-            ProxyDeterminationMethod::AllPieces => EligibilityDeterminationMethod::AllPieces,
-            ProxyDeterminationMethod::UnoccupiedTiles => {
-                EligibilityDeterminationMethod::UnoccupiedTiles
-            }
-            ProxyDeterminationMethod::PieceChain => EligibilityDeterminationMethod::PieceChain,
-            ProxyDeterminationMethod::None => EligibilityDeterminationMethod::None,
-        };
-
-        let true_card_action = GameAction {
-            functionality: converted_action_func,
-            eligibility_method: converted_action_method,
-            selection_count_bounds: proxy.action.selection_count_bounds,
-        };
-
         Ok(Card {
             name: proxy.name,
             price: proxy.price,
-            action: true_card_action,
+            action: GameAction::from_proxy(proxy.action, load_context),
             image: image_handle,
             rarity: proxy.rarity,
             description: proxy.description.clone(),

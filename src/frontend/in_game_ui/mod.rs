@@ -1,6 +1,7 @@
 mod execute_action_button;
 mod inspector;
 mod inventory;
+mod order_display;
 mod player_info_displays;
 mod shop_visuals;
 
@@ -12,8 +13,8 @@ use crate::{
         cameras::{LEFT_PANEL_WIDTH, LOWER_PANEL_HEIGHT, RIGHT_PANEL_WIDTH},
         in_game_ui::{
             execute_action_button::ExecuteActionButtonPlugin, inspector::InspectorPlugin,
-            inventory::InventoryPlugin, player_info_displays::EndTurnButtonPlugin,
-            shop_visuals::ShopVisualPlugin,
+            inventory::InventoryPlugin, order_display::OrderDisplayPlugin,
+            player_info_displays::EndTurnButtonPlugin, shop_visuals::ShopVisualPlugin,
         },
     },
 };
@@ -30,6 +31,7 @@ impl Plugin for InGameUI {
             ShopVisualPlugin,
             EndTurnButtonPlugin,
             InspectorPlugin,
+            OrderDisplayPlugin,
         ));
     }
 }
@@ -83,7 +85,7 @@ fn create_panels(mut commands: Commands) {
                 flex_grow: 0.0,
                 flex_shrink: 0.0,
                 align_content: AlignContent::Center,
-                justify_content: JustifyContent::Start,
+                justify_content: JustifyContent::SpaceAround,
                 ..default()
             },
             BackgroundColor(BACKGROUND_COLOR),

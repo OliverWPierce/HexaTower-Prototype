@@ -2,4 +2,9 @@ ProxyPiece (
     name: "The Centienial Hawk",
     model_path: "pieces/piece_models/Cosmic Cargo Spaceship.glb",
     health: 16,
+    order1_path: None,
+    order2_path: None,
+    order3_path: None,
+    order4_path: None,
+    order5_path: None,
 )

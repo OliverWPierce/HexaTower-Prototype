@@ -2,4 +2,9 @@ ProxyPiece (
     name: "Rolling Saucer",
     model_path: "pieces/piece_models/Magnetic Hockey Rover.glb",
     health: 12,
+    order1_path: None,
+    order2_path: None,
+    order3_path: None,
+    order4_path: None,
+    order5_path: None,
 )

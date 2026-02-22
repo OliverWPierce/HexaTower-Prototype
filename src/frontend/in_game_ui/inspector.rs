@@ -75,6 +75,10 @@ pub fn inspect_card(inspector: Entity, commands: &mut Commands, card_data: &Card
             TextFont {
                 font_size: 36.0,
                 ..default()
+            },
+            TextLayout {
+                justify: Justify::Center,
+                linebreak: LineBreak::WordBoundary
             }
         )],
     ));
@@ -195,6 +199,10 @@ pub fn inspect_card(inspector: Entity, commands: &mut Commands, card_data: &Card
                 font_size: 16.0,
                 ..default()
             },
+            TextLayout {
+                justify: Justify::Center,
+                linebreak: LineBreak::WordBoundary
+            }
         )],
     ));
 }
@@ -233,6 +241,10 @@ fn inspect_piece(
             TextFont {
                 font_size: 36.0,
                 ..default()
+            },
+            TextLayout {
+                justify: Justify::Center,
+                linebreak: LineBreak::WordBoundary
             }
         )],
     ));
@@ -255,6 +267,10 @@ fn inspect_piece(
                 TextFont {
                     font_size: 24.0,
                     ..default()
+                },
+                TextLayout {
+                    justify: Justify::Center,
+                    linebreak: LineBreak::WordBoundary
                 }
             )],
         ));
@@ -265,8 +281,8 @@ fn inspect_piece(
         .spawn((
             ChildOf(inspector),
             Node {
-                height: Val::Percent(20.0),
                 width: Val::Percent(90.0),
+                padding: UiRect::all(Val::Px(3.0)),
                 border: UiRect::all(Val::Percent(0.5)),
                 justify_content: JustifyContent::SpaceAround,
                 align_items: AlignItems::Center,
@@ -290,5 +306,27 @@ fn inspect_piece(
         },
     ));
 
-    commands.spawn((ChildOf(inspector),));
+    let health_bar_hue = (0.35 * health_data.current_health as f32 / health_data.max_health as f32)
+        .clamp(0.0, 0.35)
+        * 360.0;
+
+    commands.spawn((
+        ChildOf(health_panel),
+        Node {
+            width: Val::Percent(95.0),
+            height: Val::Px(15.0),
+            ..default()
+        },
+        BackgroundColor(Color::BLACK),
+        children![(
+            Node {
+                width: Val::Percent(
+                    (health_data.current_health as f32 / health_data.max_health as f32) * 100.0
+                ),
+                height: Val::Percent(100.0),
+                ..Default::default()
+            },
+            BackgroundColor(Color::hsv(health_bar_hue, 0.9, 0.9)),
+        )],
+    ));
 }

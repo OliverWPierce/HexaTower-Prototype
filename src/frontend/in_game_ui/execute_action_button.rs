@@ -9,6 +9,7 @@ use crate::{
     frontend::{
         FrontEndSystems,
         in_game_ui::{RightPanelEnt, create_panels},
+        inputs::ClickCounter,
     },
 };
 use bevy::{color::palettes::tailwind, prelude::*};
@@ -100,12 +101,12 @@ fn update_button(
 
         let color_palette = match source {
             ActionSource::Card { .. } => CARD_COLOR_PALETTE,
-            ActionSource::Neither => ORDER_COLOR_PALETTE,
+            ActionSource::Order => ORDER_COLOR_PALETTE,
         };
 
         let display_text = match source {
             ActionSource::Card { .. } => Text::new("Play Card"),
-            ActionSource::Neither => Text::new("???"),
+            ActionSource::Order => Text::new("Order"),
         };
 
         if currently_selected.as_read_only_list().len() < action.bounds().min_tiles {
@@ -169,12 +170,14 @@ fn send_execute_actions(
     execute_button: Single<Entity, With<ExecuteActionButton>>,
     action: Res<CurrentAction>,
     currently_selected: Res<SelectedLogTiles>,
+    mut meaningful_clicks: ResMut<ClickCounter>,
 ) {
     if click.entity == execute_button.into_inner()
         && let Some(action) = &action.0
         && currently_selected.as_read_only_list().len() <= action.bounds().max_tiles
         && currently_selected.as_read_only_list().len() >= action.bounds().min_tiles
     {
+        meaningful_clicks.0 += 1;
         commands.trigger(ExecuteActionRequest);
     }
 }

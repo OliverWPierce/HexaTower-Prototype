@@ -1,15 +1,18 @@
-use bevy::{prelude::*, time::Stopwatch};
+use bevy::{math::ops::sin, prelude::*, time::Stopwatch};
 
 use crate::{
     backend::{
+        game_actions::CurrentAction,
         game_parameters::SetUpBoard,
         pieces::{
-            LogPieceDespawned, LogPieceOwnedByPlayer, OccupiesTile, Piece, SpawnedLogPieceInfo,
+            ActiveLogPiece, LogPieceDespawned, LogPieceOwnedByPlayer, OccupiesTile, Piece,
+            SetPieceToActive, SpawnedLogPieceInfo,
         },
         tiles::LogicalTileLocation,
     },
     frontend::{
         FrontEndSystems,
+        inputs::ClickCounter,
         visual_player_data::{DataForPlayer, PieceBasePlateModel},
     },
 };
@@ -28,7 +31,19 @@ impl Plugin for VisPiecesPlugin {
                 .in_set(FrontEndSystems),
         );
 
+        app.add_systems(SetUpBoard, init_active_ring_model);
+        app.add_observer(set_active_request);
+
         app.add_systems(SetUpBoard, initialize_vis_error_model);
+
+        app.add_systems(Update, tmp_animate_indicator);
+
+        app.add_systems(
+            Update,
+            tmp_spawn_active_indicator
+                .run_if(resource_changed::<ActiveLogPiece>)
+                .in_set(FrontEndSystems),
+        );
     }
 }
 #[derive(Debug, Resource)]
@@ -167,5 +182,119 @@ fn start_scale_out_for_destroyed_pieces(
                 break;
             }
         }
+    }
+}
+#[derive(Resource)]
+struct ActivePieceRingModel(Handle<Scene>);
+
+fn init_active_ring_model(mut commands: Commands, asset_server: ResMut<AssetServer>) {
+    commands.insert_resource(ActivePieceRingModel(
+        asset_server.load(GltfAssetLabel::Scene(0).from_asset("ActivePieceRing.glb")),
+    ));
+}
+
+fn set_active_request(
+    click: On<Pointer<Click>>,
+    vis_pieces: Query<&VisPieceOf>,
+    mut commands: Commands,
+    loaded_action: Res<CurrentAction>,
+    mut meaningful_clicks: ResMut<ClickCounter>,
+) {
+    if loaded_action.0.is_some() {
+        return;
+    }
+
+    let Ok(log_piece) = vis_pieces.get(click.entity) else {
+        return;
+    };
+
+    meaningful_clicks.0 += 1;
+    commands.trigger(SetPieceToActive(Some(log_piece.0)));
+}
+
+#[derive(Component, Debug)]
+struct ActiveRingsAnimData {
+    offset: f32,
+    t: Stopwatch,
+    should_exist: bool,
+}
+
+fn tmp_spawn_active_indicator(
+    log_active_piece: Res<ActiveLogPiece>,
+    mut commands: Commands,
+    vis_pieces: Query<(Entity, &VisPieceOf)>,
+    indicators: Query<&mut ActiveRingsAnimData>,
+    model: Res<ActivePieceRingModel>,
+) {
+    for mut anim in indicators {
+        anim.should_exist = false;
+    }
+
+    let Some(active_piece) = log_active_piece.0 else {
+        return;
+    };
+
+    for (visual, log_piece_represented) in vis_pieces {
+        if log_piece_represented.0 != active_piece {
+            continue;
+        }
+
+        commands.spawn((
+            ActiveRingsAnimData {
+                offset: 0.0,
+                t: Stopwatch::new(),
+                should_exist: true,
+            },
+            ChildOf(visual),
+            SceneRoot(model.0.clone()),
+            Transform::from_scale(Vec3::ZERO),
+        ));
+
+        commands.spawn((
+            ActiveRingsAnimData {
+                offset: 0.3,
+                t: Stopwatch::new(),
+                should_exist: true,
+            },
+            ChildOf(visual),
+            SceneRoot(model.0.clone()),
+            Transform::from_scale(Vec3::ZERO),
+        ));
+
+        break;
+    }
+}
+
+fn tmp_animate_indicator(
+    indicators: Query<(Entity, &mut Transform, &mut ActiveRingsAnimData)>,
+    mut commands: Commands,
+    time: Res<Time>,
+) {
+    const SCALE_IN_SPEED: f32 = 3.0;
+    const SCALE_OUT_SPEED: f32 = -5.0;
+
+    const HOVER_HEIGHT: f32 = 0.5;
+    const HOVER_SPEED: f32 = 6.0;
+    const HOVER_MAGNITUDE: f32 = 0.2;
+
+    for (entity, mut transform, mut anim_data) in indicators {
+        anim_data.t.tick(time.delta());
+
+        if anim_data.should_exist {
+            transform.scale = Vec3::splat(
+                ((anim_data.t.elapsed_secs() + anim_data.offset) * SCALE_IN_SPEED).clamp(0.0, 1.0),
+            );
+        } else {
+            let scale = ((anim_data.t.elapsed_secs() + anim_data.offset) * SCALE_OUT_SPEED);
+            if scale <= 0.001 {
+                commands.entity(entity).despawn();
+            } else {
+                transform.scale = Vec3::splat(scale);
+            }
+        }
+
+        transform.translation.y = sin(anim_data.t.elapsed_secs() + anim_data.offset * HOVER_SPEED)
+            * HOVER_MAGNITUDE
+            + HOVER_HEIGHT;
     }
 }

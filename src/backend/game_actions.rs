@@ -1,4 +1,4 @@
-use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
+use bevy::{asset::LoadContext, ecs::schedule::ScheduleLabel, prelude::*};
 use serde::{Deserialize, Serialize};
 
 use crate::backend::{
@@ -54,6 +54,61 @@ impl Plugin for GameActionsPlugin {
         app.add_observer(validate_execution_request);
     }
 }
+#[derive(Debug, Deserialize, Serialize, Reflect, Clone)]
+pub struct ProxyAction {
+    functionality: ProxyActionFunctionality,
+    eligibility_method: ProxyDeterminationMethod,
+    selection_count_bounds: GameDesignBounds,
+}
+#[derive(Debug, Deserialize, Serialize, Reflect, Clone)]
+pub enum ProxyActionFunctionality {
+    DeleteTile,
+    SpawnPiece { path_to_proxy_piece: String },
+    DoubleTakeTest { path_to_proxy_piece: String },
+    AlterCoinCount(i32),
+}
+
+#[derive(Debug, Deserialize, Serialize, Reflect, Clone, Copy)]
+pub enum ProxyDeterminationMethod {
+    AllTiles,
+    AllPieces,
+    UnoccupiedTiles,
+    PieceChain,
+    None,
+}
+
+impl GameAction {
+    pub fn from_proxy(proxy: ProxyAction, loader: &mut LoadContext) -> Self {
+        let converted_action_func = match proxy.functionality {
+            ProxyActionFunctionality::DeleteTile => ActionFunctionality::DeleteTile,
+            ProxyActionFunctionality::SpawnPiece {
+                path_to_proxy_piece,
+            } => ActionFunctionality::SpawnPiece(loader.load(path_to_proxy_piece)),
+            ProxyActionFunctionality::DoubleTakeTest {
+                path_to_proxy_piece,
+            } => ActionFunctionality::DoubleTakeTest(loader.load(path_to_proxy_piece)),
+            ProxyActionFunctionality::AlterCoinCount(change) => {
+                ActionFunctionality::AlterCoinCount(change)
+            }
+        };
+
+        let converted_action_method = match proxy.eligibility_method {
+            ProxyDeterminationMethod::AllTiles => EligibilityDeterminationMethod::AllTiles,
+            ProxyDeterminationMethod::AllPieces => EligibilityDeterminationMethod::AllPieces,
+            ProxyDeterminationMethod::UnoccupiedTiles => {
+                EligibilityDeterminationMethod::UnoccupiedTiles
+            }
+            ProxyDeterminationMethod::PieceChain => EligibilityDeterminationMethod::PieceChain,
+            ProxyDeterminationMethod::None => EligibilityDeterminationMethod::None,
+        };
+
+        GameAction {
+            functionality: converted_action_func,
+            eligibility_method: converted_action_method,
+            selection_count_bounds: proxy.selection_count_bounds,
+        }
+    }
+}
 
 /// This set is used to tell a system to run only after front end systems run. It ensures the backend doesn't delete data before the front end gets to look at it.
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -86,7 +141,7 @@ pub struct GameAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ActionSource {
     Card { inventory_index: usize },
-    Neither,
+    Order,
 }
 
 #[derive(Debug, Resource, Default)]
@@ -338,8 +393,9 @@ pub struct ActionOrSelectionChanged;
 /// the only way to select a tile is through a special event.
 pub mod dangerous_selection_mechanics {
 
-    use crate::backend::game_actions::{
-        ActionOrSelectionChanged, CurrentAction, CurrentSource, SetActionTo,
+    use crate::backend::{
+        game_actions::{ActionOrSelectionChanged, CurrentAction, CurrentSource, SetActionTo},
+        pieces::SetPieceToActive,
     };
     use bevy::prelude::*;
 
@@ -404,6 +460,11 @@ pub mod dangerous_selection_mechanics {
             SetActionTo::Action { action, source } => {
                 current_action.0 = Some(action);
                 current_source.0 = Some(source);
+
+                match source {
+                    super::ActionSource::Card { .. } => commands.trigger(SetPieceToActive(None)),
+                    super::ActionSource::Order => (),
+                }
             }
         }
 

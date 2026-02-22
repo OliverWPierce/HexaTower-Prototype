@@ -1,14 +1,13 @@
 use bevy::prelude::*;
 
-use bevy::{
-    asset::{AssetLoader, LoadedFolder},
-    ecs::schedule::ScheduleLabel,
-    prelude::*,
-};
+use bevy::asset::AssetLoader;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::backend::BackEndSystems;
+use crate::backend::{
+    BackEndSystems,
+    game_actions::{GameAction, ProxyAction, SetActionTo},
+};
 
 pub struct PiecesPlugin;
 
@@ -19,12 +18,18 @@ impl Plugin for PiecesPlugin {
         app.add_message::<LogPieceDespawned>();
 
         app.init_asset::<Piece>();
+        app.init_asset::<Order>();
         app.init_asset_loader::<PieceAssetLoader>();
+        app.init_asset_loader::<OrderAssetLoader>();
+
+        app.init_resource::<ActiveLogPiece>();
 
         app.add_systems(
             Update,
             (spawn_logpiece, send_despawn_notifications).in_set(BackEndSystems),
         );
+
+        app.add_observer(set_active_piece);
     }
 }
 
@@ -33,6 +38,74 @@ struct ProxyPiece {
     name: String,
     model_path: String,
     health: u32,
+
+    // It would be simpler to store these as a vector, but having separate feilds is clearer to modders and prevents inncorrect situations, since the code is only designed to handle five orders per peice.
+    order1_path: Option<String>,
+    order2_path: Option<String>,
+    order3_path: Option<String>,
+    order4_path: Option<String>,
+    order5_path: Option<String>,
+}
+
+#[derive(Debug, Component)]
+pub struct PieceOrders(pub [Option<Handle<Order>>; 5]);
+
+#[derive(Asset, Debug, TypePath, Clone)]
+pub struct Order {
+    pub action: GameAction,
+    pub description: String,
+    pub icon: Handle<Image>,
+}
+#[derive(Debug, Deserialize, Reflect, Serialize)]
+struct ProxyOrder {
+    proxy_action: ProxyAction,
+    description: String,
+    icon_path: String,
+}
+
+#[derive(Debug, Default, TypePath)]
+pub struct OrderAssetLoader;
+
+#[non_exhaustive]
+#[derive(Debug, Error)]
+pub enum OrderAssetLoaderError {
+    /// An [IO](std::io) Error
+    #[error("Could not load asset: {0}")]
+    Io(#[from] std::io::Error),
+    /// A [RON](ron) Error
+    #[error("Could not parse RON: {0}")]
+    RonSpannedError(#[from] ron::error::SpannedError),
+}
+
+impl AssetLoader for OrderAssetLoader {
+    type Asset = Order;
+
+    type Settings = ();
+
+    type Error = OrderAssetLoaderError;
+
+    async fn load(
+        &self,
+        reader: &mut dyn bevy::asset::io::Reader,
+        _settings: &Self::Settings,
+        load_context: &mut bevy::asset::LoadContext<'_>,
+    ) -> Result<Self::Asset, Self::Error> {
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).await?;
+        let proxy = ron::de::from_bytes::<ProxyOrder>(&bytes)?;
+
+        let order = Order {
+            action: GameAction::from_proxy(proxy.proxy_action, load_context),
+            description: proxy.description.clone(),
+            icon: load_context.load(proxy.icon_path),
+        };
+
+        Ok(order)
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &["order.ron"]
+    }
 }
 
 #[derive(Debug, Asset, Clone, TypePath)]
@@ -40,6 +113,7 @@ pub struct Piece {
     pub name: String,
     pub model: Handle<Scene>,
     pub health: u32,
+    pub default_orders: [Option<Handle<Order>>; 5],
 }
 
 #[derive(Debug, Default, TypePath)]
@@ -75,6 +149,13 @@ impl AssetLoader for PieceAssetLoader {
             name: proxy.name.clone(),
             model: load_context.load(GltfAssetLabel::Scene(0).from_asset(proxy.model_path)),
             health: proxy.health,
+            default_orders: [
+                proxy.order1_path.map(|path| load_context.load(path)),
+                proxy.order2_path.map(|path| load_context.load(path)),
+                proxy.order3_path.map(|path| load_context.load(path)),
+                proxy.order4_path.map(|path| load_context.load(path)),
+                proxy.order5_path.map(|path| load_context.load(path)),
+            ],
         };
 
         Ok(piece)
@@ -157,6 +238,7 @@ fn spawn_logpiece(
                         max_health: piece_instructions.health,
                         current_health: piece_instructions.health,
                     },
+                    PieceOrders(piece_instructions.default_orders.clone()),
                 ))
                 .id();
 
@@ -178,4 +260,31 @@ fn send_despawn_notifications(
     for logical_piece in despawned_logical_pieces.read() {
         despawns.write(LogPieceDespawned(logical_piece));
     }
+}
+
+#[derive(Debug, Resource, Default)]
+pub struct ActiveLogPiece(pub Option<Entity>);
+
+#[derive(Event)]
+pub struct SetPieceToActive(pub Option<Entity>);
+
+fn set_active_piece(
+    new_piece: On<SetPieceToActive>,
+    mut current_piece: ResMut<ActiveLogPiece>,
+    mut commands: Commands,
+) {
+    if new_piece.0.is_none() {
+        current_piece.0 = None;
+        return;
+    }
+
+    if let Some(piece) = current_piece.0
+        && new_piece.0.unwrap() == piece
+    {
+        current_piece.0 = None;
+    } else {
+        current_piece.0 = new_piece.0;
+    }
+
+    commands.trigger(SetActionTo::None);
 }

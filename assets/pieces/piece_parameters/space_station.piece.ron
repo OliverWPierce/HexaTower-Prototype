@@ -2,4 +2,9 @@ ProxyPiece (
     name: "Command Point Alpha",
     model_path: "pieces/piece_models/Cosmic Cargo Space Station.glb",
     health: 9,
+    order1_path: None,
+    order2_path: None,
+    order3_path: None,
+    order4_path: None,
+    order5_path: None,
 )

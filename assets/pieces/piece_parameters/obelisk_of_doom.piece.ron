@@ -2,4 +2,9 @@ ProxyPiece (
     name: "imposing obelisk",
     model_path: "pieces/piece_models/Obelisk.glb",
     health: 20,
+    order1_path: Some("orders/delete_stuff.order.ron"),
+    order2_path: None,
+    order3_path: None,
+    order4_path: None,
+    order5_path: None,
 )

@@ -5,9 +5,12 @@ use crate::{
         game_parameters::SetUpBoard,
         players::{ActivePlayer, StartTurn},
     },
-    frontend::in_game_ui::{
-        LowerPanelEnt, create_panels,
-        inspector::{InspectorPanel, inspect_card},
+    frontend::{
+        in_game_ui::{
+            LowerPanelEnt, create_panels,
+            inspector::{InspectorPanel, inspect_card},
+        },
+        inputs::ClickCounter,
     },
 };
 
@@ -36,14 +39,14 @@ struct CardHolderPanel;
 #[derive(Debug, Component)]
 struct InventoryInfoNode;
 
-fn create_inventory_panel(mut commands: Commands, lower_panel: Res<LowerPanelEnt>) {
+pub fn create_inventory_panel(mut commands: Commands, lower_panel: Res<LowerPanelEnt>) {
     let parent = commands
         .spawn((
             ChildOf(lower_panel.0),
             Node {
                 height: Val::Percent(95.0),
                 width: Val::Percent(65.0),
-                border: UiRect::all(Val::Percent(0.5)),
+                border: UiRect::all(Val::Px(2.0)),
                 justify_content: JustifyContent::SpaceAround,
                 align_items: AlignItems::Center,
                 flex_direction: FlexDirection::Column,
@@ -159,7 +162,7 @@ fn load_cards_into_ui(
         ));
     }
 }
-
+#[allow(clippy::too_many_arguments)]
 fn load_card_action(
     click: On<Pointer<Click>>,
     vis_cards: Query<&CorrespondingInventoryIndex>,
@@ -167,11 +170,14 @@ fn load_card_action(
     inventories: Query<&PlayerCardInventory>,
     card_assets: Res<Assets<Card>>,
     source: Res<CurrentSource>,
+    mut meaningful_clicks: ResMut<ClickCounter>,
     mut commands: Commands,
 ) {
     let Ok(CorrespondingInventoryIndex(index)) = vis_cards.get(click.entity) else {
         return;
     };
+
+    meaningful_clicks.0 += 1;
 
     let Ok(log_inventory) = inventories.get(active_player.0) else {
         error!("The player had no inventory");

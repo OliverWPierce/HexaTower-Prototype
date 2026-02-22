@@ -1,6 +1,4 @@
-use bevy::{
-    ecs::schedule::ScheduleLabel, prelude::*, render::render_resource::encase::private::Writer,
-};
+use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
 
 use crate::backend::{BackEndSystems, game_actions::ClearBackendData, game_parameters::SetUpBoard};
 
@@ -91,7 +89,7 @@ pub struct SwitchPlayerRequest;
 fn switch_player(
     _request: On<SwitchPlayerRequest>,
     mut commands: Commands,
-    players: Query<(&PlayerTurnOrder)>,
+    players: Query<&PlayerTurnOrder>,
     mut active: ResMut<ActivePlayer>,
 ) {
     let Ok(next) = players.get(active.0) else {

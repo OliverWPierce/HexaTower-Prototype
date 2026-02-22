@@ -15,6 +15,7 @@ use crate::{
             LeftPanelEnt, create_panels,
             inspector::{InspectorPanel, inspect_card},
         },
+        inputs::ClickCounter,
     },
 };
 
@@ -364,11 +365,12 @@ fn attempt_purchase(
     click: On<Pointer<Click>>,
     cards: Query<&RepresentsLogCardOffered>,
     mut commands: Commands,
+    mut meaningful_clicks: ResMut<ClickCounter>,
 ) {
     let Ok(log_card_cords) = cards.get(click.entity) else {
         return;
     };
-
+    meaningful_clicks.0 += 1;
     commands.trigger(TryPurchaseCard {
         slot: log_card_cords.card_slot,
         set: log_card_cords.panel,
