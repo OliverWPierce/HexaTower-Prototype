@@ -3,8 +3,8 @@ ProxyPiece (
     model_path: "pieces/piece_models/Obelisk.glb",
     health: 20,
     order1_path: Some("orders/delete_stuff.order.ron"),
-    order2_path: None,
-    order3_path: None,
+    order2_path: Some("orders/move_self.order.ron"),
+    order3_path: Some("orders/give_health.order.ron"),
     order4_path: None,
     order5_path: None,
 )

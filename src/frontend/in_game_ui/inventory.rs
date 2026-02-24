@@ -138,7 +138,7 @@ fn load_cards_into_ui(
             Node {
                 aspect_ratio: Some(3.0 / 5.0),
                 height: Val::Percent(100.0),
-                border: UiRect::all(Val::Px(3.0)),
+                border: UiRect::all(Val::Px(5.0)),
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
                 ..default()
@@ -223,7 +223,7 @@ fn update_selection(
         ActionSource::Card { inventory_index } => {
             for (vis_represents_index, mut color) in vis_inventory_cards.iter_mut() {
                 if inventory_index == vis_represents_index.0 {
-                    color.set_all(Color::WHITE);
+                    color.set_all(tailwind::SLATE_300);
                 } else {
                     color.set_all(Color::Srgba(tailwind::SLATE_700));
                 }

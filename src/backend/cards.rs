@@ -193,14 +193,11 @@ impl PlayerCardInventory {
 fn initialize_player_inventories(
     players: Query<Entity, With<PlayerMarker>>,
     mut commands: Commands,
-    // asset_server: ResMut<AssetServer>,
 ) {
-    // let tower_spawn_card_handle: Handle<Card> =
-    //     asset_server.load("cards/card_parameters/tower_genesis.card.ron");
-
     for player in players {
         commands.entity(player).insert(PlayerCardInventory {
-            max_size: 5,
+            // code handles a max of 7 on mac laptop screen
+            max_size: 4,
             cards: Vec::new(),
         });
     }

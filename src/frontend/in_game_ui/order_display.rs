@@ -1,5 +1,5 @@
 use bevy::{
-    color::palettes::tailwind::{AMBER_600, EMERALD_600, SLATE_800, SLATE_950},
+    color::palettes::tailwind::{SLATE_300, SLATE_600, SLATE_800, SLATE_900, SLATE_950},
     prelude::*,
 };
 
@@ -33,16 +33,16 @@ fn create_order_display_panel(mut commands: Commands, lower_panel: Res<LowerPane
     commands.spawn((
         ChildOf(lower_panel.0),
         Node {
-            width: Val::Percent(30.0),
+            width: Val::Percent(34.0),
             height: Val::Percent(95.0),
-            border: UiRect::all(Val::Px(2.0)),
+            border: UiRect::all(Val::Px(3.0)),
             flex_direction: FlexDirection::Column,
-            justify_content: JustifyContent::SpaceAround,
+            justify_content: JustifyContent::Start,
             align_items: AlignItems::Center,
             ..default()
         },
-        BackgroundColor(SLATE_800.into()),
         BorderRadius::all(Val::Px(15.0)),
+        BackgroundColor(SLATE_600.into()),
         BorderColor::all(SLATE_800),
         OrderPanel,
     ));
@@ -82,8 +82,12 @@ fn update_panel(
             .spawn((
                 ChildOf(parent.entity()),
                 Node {
-                    width: Val::Percent(95.0),
+                    max_width: Val::Percent(95.0),
+                    flex_grow: 1.0,
                     flex_wrap: FlexWrap::Wrap,
+                    justify_content: JustifyContent::SpaceAround,
+                    align_content: AlignContent::SpaceAround,
+                    align_items: AlignItems::Start,
                     ..default()
                 },
             ))
@@ -105,25 +109,25 @@ fn update_panel(
                     ChildOf(order_icon_panel),
                     Node {
                         aspect_ratio: Some(1.0),
-                        flex_grow: 1.0,
                         max_height: Val::Percent(47.0),
                         min_height: Val::Percent(47.0),
-                        border: UiRect::all(Val::Px(1.0)),
+                        border: UiRect::all(Val::Px(5.0)),
                         align_items: AlignItems::Center,
                         justify_content: JustifyContent::Center,
                         ..Default::default()
                     },
-                    BorderColor::all(SLATE_950),
-                    BackgroundColor(AMBER_600.into()),
+                    BorderColor::all(SLATE_300),
+                    BackgroundColor(SLATE_800.into()),
                     BorderRadius::all(Val::Percent(100.0)),
                     children![(
                         ImageNode {
                             image: order_data.icon.clone(),
+                            image_mode: NodeImageMode::Stretch,
                             ..default()
                         },
                         Node {
-                            aspect_ratio: Some(1.0),
-                            max_height: Val::Percent(100.0),
+                            width: Val::Percent(100.0),
+                            height: Val::Percent(100.0),
                             ..default()
                         }
                     )],
@@ -133,14 +137,13 @@ fn update_panel(
                     ChildOf(order_icon_panel),
                     Node {
                         aspect_ratio: Some(1.0),
-                        flex_grow: 1.0,
-                        border: UiRect::all(Val::Px(1.0)),
+                        border: UiRect::all(Val::Px(5.0)),
                         max_height: Val::Percent(47.0),
                         min_height: Val::Percent(47.0),
                         ..Default::default()
                     },
-                    BorderColor::all(SLATE_950),
-                    BackgroundColor(EMERALD_600.into()),
+                    BorderColor::all(SLATE_900),
+                    BackgroundColor(SLATE_800.into()),
                     BorderRadius::all(Val::Percent(100.0)),
                 ));
             }
