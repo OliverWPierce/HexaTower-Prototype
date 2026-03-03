@@ -285,7 +285,7 @@ fn tmp_animate_indicator(
                 ((anim_data.t.elapsed_secs() + anim_data.offset) * SCALE_IN_SPEED).clamp(0.0, 1.0),
             );
         } else {
-            let scale = ((anim_data.t.elapsed_secs() + anim_data.offset) * SCALE_OUT_SPEED);
+            let scale = (anim_data.t.elapsed_secs() + anim_data.offset) * SCALE_OUT_SPEED;
             if scale <= 0.001 {
                 commands.entity(entity).despawn();
             } else {

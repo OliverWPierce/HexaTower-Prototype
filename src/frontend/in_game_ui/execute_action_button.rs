@@ -101,12 +101,12 @@ fn update_button(
 
         let color_palette = match source {
             ActionSource::Card { .. } => CARD_COLOR_PALETTE,
-            ActionSource::Order => ORDER_COLOR_PALETTE,
+            ActionSource::Order { .. } => ORDER_COLOR_PALETTE,
         };
 
         let display_text = match source {
             ActionSource::Card { .. } => Text::new("Play Card"),
-            ActionSource::Order => Text::new("Order"),
+            ActionSource::Order { .. } => Text::new("Order"),
         };
 
         if currently_selected.as_read_only_list().len() < action.bounds().min_tiles {

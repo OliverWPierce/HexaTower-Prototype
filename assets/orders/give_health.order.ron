@@ -1,4 +1,5 @@
 ProxyOrder (
+    name: "Tome of Healing",
     proxy_action: ProxyAction (
         functionality: DeleteTile,
         eligibility_method: UnoccupiedTiles,

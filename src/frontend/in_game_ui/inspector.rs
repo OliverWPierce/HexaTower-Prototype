@@ -7,10 +7,10 @@ use crate::{
     backend::{
         cards::Card,
         game_parameters::SetUpBoard,
-        pieces::{Health, LogPieceOwnedByPlayer},
+        pieces::{ActiveLogPiece, Health, LogPieceOwnedByPlayer, Order, PieceOrders},
     },
     frontend::{
-        in_game_ui::{RightPanelEnt, execute_action_button},
+        in_game_ui::{RightPanelEnt, execute_action_button, order_display::ButtonForOrderAtIndex},
         visual_pieces::{PieceName, VisPieceOf},
         visual_player_data::{DataForPlayer, DisplayName},
     },
@@ -26,6 +26,7 @@ impl Plugin for InspectorPlugin {
         );
         app.add_observer(clear_inspector_panel);
         app.add_observer(inspect_piece);
+        app.add_observer(inspect_order);
     }
 }
 
@@ -327,6 +328,113 @@ fn inspect_piece(
                 ..Default::default()
             },
             BackgroundColor(Color::hsv(health_bar_hue, 0.9, 0.9)),
+        )],
+    ));
+}
+
+fn inspect_order(
+    over: On<Pointer<Over>>,
+    mut commands: Commands,
+    inspector: Single<Entity, With<InspectorPanel>>,
+    selectable_icons: Query<&ButtonForOrderAtIndex>,
+    maybe_active: Res<ActiveLogPiece>,
+    pieces: Query<&PieceOrders>,
+    order_assets: Res<Assets<Order>>,
+) {
+    let Ok(index) = selectable_icons.get(over.entity) else {
+        return;
+    };
+
+    let Some(active_piece) = maybe_active.0 else {
+        error!("The player selected an order while there was no active piece.");
+        return;
+    };
+
+    let Ok(orders) = pieces.get(active_piece) else {
+        error!("Active piece had no orders.");
+        return;
+    };
+
+    let Some(order_handle) = &orders.0[index.0] else {
+        return;
+    };
+
+    let Some(order_data) = order_assets.get(order_handle) else {
+        return;
+    };
+
+    //actually render the panel:
+    let inspector = inspector.entity();
+
+    commands.entity(inspector).despawn_children();
+
+    commands.spawn((
+        ChildOf(inspector),
+        Node {
+            width: Val::Percent(90.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        children![(
+            Text::new(order_data.name.clone()),
+            TextFont {
+                font_size: 36.0,
+                ..default()
+            },
+            TextLayout {
+                justify: Justify::Center,
+                linebreak: LineBreak::WordBoundary
+            }
+        )],
+    ));
+
+    commands.spawn((
+        ChildOf(inspector),
+        Node {
+            aspect_ratio: Some(1.0),
+            max_width: Val::Percent(60.0),
+            min_width: Val::Percent(60.0),
+            border: UiRect::all(Val::Px(10.0)),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            ..Default::default()
+        },
+        BorderColor::all(SLATE_900),
+        BackgroundColor(SLATE_800.into()),
+        BorderRadius::all(Val::Percent(100.0)),
+        children![(
+            ImageNode {
+                image: order_data.icon.clone(),
+                image_mode: NodeImageMode::Stretch,
+                ..default()
+            },
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                ..default()
+            }
+        )],
+    ));
+
+    commands.spawn((
+        ChildOf(inspector),
+        Node {
+            width: Val::Percent(90.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        children![(
+            Text::new(order_data.description.clone()),
+            TextFont {
+                font_size: 16.0,
+                ..default()
+            },
+            TextLayout {
+                justify: Justify::Center,
+                linebreak: LineBreak::WordBoundary
+            }
         )],
     ));
 }

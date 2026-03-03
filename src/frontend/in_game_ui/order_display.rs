@@ -5,10 +5,15 @@ use bevy::{
 
 use crate::{
     backend::{
+        game_actions::{ActionOrSelectionChanged, ActionSource, CurrentSource, SetActionTo},
         game_parameters::SetUpBoard,
         pieces::{ActiveLogPiece, Order, PieceOrders},
     },
-    frontend::in_game_ui::{LowerPanelEnt, inventory::create_inventory_panel},
+    frontend::{
+        FrontEndSystems,
+        in_game_ui::{LowerPanelEnt, inventory::create_inventory_panel},
+        inputs::ClickCounter,
+    },
 };
 
 pub struct OrderDisplayPlugin;
@@ -23,6 +28,13 @@ impl Plugin for OrderDisplayPlugin {
         app.add_systems(
             Update,
             update_panel.run_if(resource_changed::<ActiveLogPiece>),
+        );
+
+        app.add_observer(select_order);
+
+        app.add_systems(
+            ActionOrSelectionChanged,
+            highlight_active_order_icon.in_set(FrontEndSystems),
         );
     }
 }
@@ -47,6 +59,8 @@ fn create_order_display_panel(mut commands: Commands, lower_panel: Res<LowerPane
         OrderPanel,
     ));
 }
+#[derive(Debug, Component)]
+pub struct ButtonForOrderAtIndex(pub usize);
 
 fn update_panel(
     active_piece: Res<ActiveLogPiece>,
@@ -70,9 +84,9 @@ fn update_panel(
             },
             BorderColor::all(SLATE_950),
             children![(
-                Text::new("Availible Orders for Active Piece"),
+                Text::new("Availible Orders"),
                 TextFont {
-                    font_size: 24.0,
+                    font_size: 16.0,
                     ..default()
                 }
             )],
@@ -98,7 +112,7 @@ fn update_panel(
             return;
         };
 
-        for order in orders.0.iter() {
+        for (index, order) in orders.0.iter().enumerate() {
             if let Some(order_handle) = order {
                 let Some(order_data) = all_orders.get(order_handle) else {
                     error!("An order handle was unable to retrieve that order's data.");
@@ -116,9 +130,10 @@ fn update_panel(
                         justify_content: JustifyContent::Center,
                         ..Default::default()
                     },
-                    BorderColor::all(SLATE_300),
+                    BorderColor::all(SLATE_900),
                     BackgroundColor(SLATE_800.into()),
                     BorderRadius::all(Val::Percent(100.0)),
+                    ButtonForOrderAtIndex(index),
                     children![(
                         ImageNode {
                             image: order_data.icon.clone(),
@@ -157,5 +172,69 @@ fn update_panel(
                 ..default()
             },
         ));
+    }
+}
+
+fn select_order(
+    click: On<Pointer<Click>>,
+    mut declare_meaningful: ResMut<ClickCounter>,
+    selectable_icons: Query<&ButtonForOrderAtIndex>,
+    maybe_active: Res<ActiveLogPiece>,
+    pieces: Query<&PieceOrders>,
+    order_assets: Res<Assets<Order>>,
+    mut commands: Commands,
+) {
+    let Ok(index) = selectable_icons.get(click.entity) else {
+        return;
+    };
+
+    declare_meaningful.0 += 1;
+
+    let Some(active_piece) = maybe_active.0 else {
+        error!("The player selected an order while there was no active piece.");
+        return;
+    };
+
+    let Ok(orders) = pieces.get(active_piece) else {
+        error!("Active piece had no orders.");
+        return;
+    };
+
+    let Some(order_handle) = &orders.0[index.0] else {
+        return;
+    };
+
+    let Some(order_data) = order_assets.get(order_handle) else {
+        return;
+    };
+
+    commands.trigger(SetActionTo::Action {
+        action: order_data.action.clone(),
+        source: crate::backend::game_actions::ActionSource::Order {
+            index_in_piece_orders: index.0,
+        },
+    });
+}
+
+fn highlight_active_order_icon(
+    icons: Query<(&mut BorderColor, &ButtonForOrderAtIndex)>,
+    action_source: Res<CurrentSource>,
+) {
+    let Some(ActionSource::Order {
+        index_in_piece_orders,
+    }) = action_source.0
+    else {
+        for (mut color, _) in icons {
+            color.set_all(SLATE_900);
+        }
+        return;
+    };
+
+    for (mut color, index) in icons {
+        if index.0 == index_in_piece_orders {
+            color.set_all(SLATE_300);
+        } else {
+            color.set_all(SLATE_900);
+        }
     }
 }

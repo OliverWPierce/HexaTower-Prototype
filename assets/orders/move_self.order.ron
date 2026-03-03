@@ -1,4 +1,5 @@
 ProxyOrder (
+    name: "Hustle",
     proxy_action: ProxyAction (
         functionality: DeleteTile,
         eligibility_method: UnoccupiedTiles,

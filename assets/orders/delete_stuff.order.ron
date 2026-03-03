@@ -1,7 +1,8 @@
 ProxyOrder (
+    name: "Obliterate",
     proxy_action: ProxyAction (
-        functionality: DeleteTile,
-        eligibility_method: UnoccupiedTiles,
+        functionality: AttackPiece(Constant(5)),
+        eligibility_method: AllPieces,
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 5)),
         ),
     description: "This order deletes any tile you like.",

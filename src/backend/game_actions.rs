@@ -5,7 +5,7 @@ use crate::backend::{
     BackEndSystems,
     game_actions::dangerous_selection_mechanics::{SelectedLogTiles, TileSelectionStatus},
     game_parameters::SetUpBoard,
-    pieces::{OccupiedByPiece, Piece, SpawnLogPiece},
+    pieces::{DamagePiece, DamageType, OccupiedByPiece, Piece, SpawnLogPiece},
     players::{ActivePlayer, StartTurn},
     shop::ChangeActivePlayerCoinsBy,
     tiles::{
@@ -66,6 +66,7 @@ pub enum ProxyActionFunctionality {
     SpawnPiece { path_to_proxy_piece: String },
     DoubleTakeTest { path_to_proxy_piece: String },
     AlterCoinCount(i32),
+    AttackPiece(DamageType),
 }
 
 #[derive(Debug, Deserialize, Serialize, Reflect, Clone, Copy)]
@@ -89,6 +90,9 @@ impl GameAction {
             } => ActionFunctionality::DoubleTakeTest(loader.load(path_to_proxy_piece)),
             ProxyActionFunctionality::AlterCoinCount(change) => {
                 ActionFunctionality::AlterCoinCount(change)
+            }
+            ProxyActionFunctionality::AttackPiece(damage_type) => {
+                ActionFunctionality::AttackPiece(damage_type)
             }
         };
 
@@ -114,12 +118,13 @@ impl GameAction {
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ClearBackendData;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ActionFunctionality {
     DeleteTile,
     SpawnPiece(Handle<Piece>),
     DoubleTakeTest(Handle<Piece>),
     AlterCoinCount(i32),
+    AttackPiece(DamageType),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -131,7 +136,7 @@ pub enum EligibilityDeterminationMethod {
     None,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct GameAction {
     pub functionality: ActionFunctionality,
     pub eligibility_method: EligibilityDeterminationMethod,
@@ -141,7 +146,7 @@ pub struct GameAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ActionSource {
     Card { inventory_index: usize },
-    Order,
+    Order { index_in_piece_orders: usize },
 }
 
 #[derive(Debug, Resource, Default)]
@@ -204,6 +209,10 @@ impl SelectionBounds for ActionFunctionality {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
+            ActionFunctionality::AttackPiece(_) => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
         }
     }
 }
@@ -235,7 +244,7 @@ impl SelectionBounds for EligibilityDeterminationMethod {
     }
 }
 
-#[derive(Debug, Resource, PartialEq, Eq, Default)]
+#[derive(Debug, Resource, PartialEq, Default)]
 pub struct CurrentAction(pub Option<GameAction>);
 
 #[derive(Debug, ScheduleLabel, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -246,14 +255,16 @@ fn insert_selection_data(mut new_tiles: MessageReader<LogicalTileCreated>, mut c
         commands.entity(*tile).insert(TileSelectionStatus::new());
     }
 }
-
-fn execute_action_functionality(
+#[allow(clippy::too_many_arguments)]
+pub fn execute_action_functionality(
     action: Res<CurrentAction>,
     selected_tiles: Res<SelectedLogTiles>,
     active_plyer: Res<ActivePlayer>,
     mut deletions: MessageWriter<DeleteLogTileRequest>,
     mut piece_spawns: MessageWriter<SpawnLogPiece>,
+    mut damage_writer: MessageWriter<DamagePiece>,
     mut commands: Commands,
+    map_tile_to_piece: Query<&OccupiedByPiece>,
 ) {
     let Some(GameAction { functionality, .. }) = action.0.clone() else {
         return;
@@ -286,6 +297,20 @@ fn execute_action_functionality(
         }
         ActionFunctionality::AlterCoinCount(delta_coins) => {
             commands.trigger(ChangeActivePlayerCoinsBy(delta_coins));
+        }
+        ActionFunctionality::AttackPiece(damage_type) => {
+            for log_tile in selected_tiles.as_read_only_list() {
+                let Ok(log_piece) = map_tile_to_piece.get(*log_tile) else {
+                    warn!("tried to damage a piece on a tile which itself had no piece.");
+                    continue;
+                };
+
+                damage_writer.write(DamagePiece {
+                    log_piece: log_piece.log_piece(),
+                    method: damage_type,
+                    source_player: Some(active_plyer.0),
+                });
+            }
         }
     }
 }
@@ -463,7 +488,7 @@ pub mod dangerous_selection_mechanics {
 
                 match source {
                     super::ActionSource::Card { .. } => commands.trigger(SetPieceToActive(None)),
-                    super::ActionSource::Order => (),
+                    super::ActionSource::Order { .. } => (),
                 }
             }
         }

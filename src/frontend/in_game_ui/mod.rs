@@ -4,6 +4,7 @@ mod inventory;
 mod order_display;
 mod player_info_displays;
 mod shop_visuals;
+mod winner_display;
 
 use bevy::{color::palettes::tailwind, prelude::*};
 
@@ -15,6 +16,7 @@ use crate::{
             execute_action_button::ExecuteActionButtonPlugin, inspector::InspectorPlugin,
             inventory::InventoryPlugin, order_display::OrderDisplayPlugin,
             player_info_displays::EndTurnButtonPlugin, shop_visuals::ShopVisualPlugin,
+            winner_display::WinScreenPlugin,
         },
     },
 };
@@ -32,6 +34,7 @@ impl Plugin for InGameUI {
             EndTurnButtonPlugin,
             InspectorPlugin,
             OrderDisplayPlugin,
+            WinScreenPlugin,
         ));
     }
 }

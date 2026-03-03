@@ -1,6 +1,11 @@
 use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
 
-use crate::backend::{BackEndSystems, game_actions::ClearBackendData, game_parameters::SetUpBoard};
+use crate::backend::{
+    BackEndSystems,
+    game_actions::ClearBackendData,
+    game_parameters::SetUpBoard,
+    pieces::{LogPieceOwnedByPlayer, OwnsLogPieces, WinCondition},
+};
 
 pub struct PlayersPlugin;
 
@@ -9,6 +14,7 @@ impl Plugin for PlayersPlugin {
         app.add_systems(SetUpBoard, create_basic_players.in_set(BackEndSystems));
 
         app.add_observer(switch_player);
+        app.add_observer(check_if_player_dead_or_game_over);
         app.add_message::<CreatedLogPlayer>();
 
         app.add_systems(
@@ -45,7 +51,7 @@ pub fn create_basic_players(
     let mut players_created = Vec::new();
 
     for (index, _) in qued_players.0.iter().enumerate() {
-        let new_player = commands.spawn(PlayerMarker).id();
+        let new_player = commands.spawn((PlayerMarker, PlayerState::Alive)).id();
         created_players.write(CreatedLogPlayer(new_player, index));
 
         players_created.push(new_player);
@@ -123,4 +129,51 @@ fn tmp_update_and_check_start_delay(
         commands.remove_resource::<TmpTimerForFirstTurn>();
         commands.run_schedule(StartTurn);
     }
+}
+#[derive(Debug, Component)]
+enum PlayerState {
+    Alive,
+    Dead,
+}
+#[derive(Debug, Event)]
+pub struct CheckForWinner;
+
+fn check_if_player_dead_or_game_over(
+    _trigger: On<CheckForWinner>,
+    players: Query<(&mut PlayerState, &OwnsLogPieces)>,
+    living_win_conditions: Query<&LogPieceOwnedByPlayer, With<WinCondition>>,
+    mut commands: Commands,
+) {
+    let mut living_players: u8 = 0;
+
+    for (mut player_state, owned_pieces) in players {
+        let mut should_be_dead = true;
+
+        for piece in owned_pieces.list() {
+            let Ok(..) = living_win_conditions.get(*piece) else {
+                continue;
+            };
+            should_be_dead = false;
+            break;
+        }
+
+        if should_be_dead {
+            *player_state = PlayerState::Dead;
+        } else {
+            living_players += 1;
+        }
+    }
+
+    if living_players == 1 {
+        commands.trigger(GameOver {
+            winner: Some(living_win_conditions.iter().next().unwrap().0),
+        });
+    } else if living_players == 0 {
+        commands.trigger(GameOver { winner: None });
+    }
+}
+
+#[derive(Debug, Event)]
+pub struct GameOver {
+    pub winner: Option<Entity>,
 }
