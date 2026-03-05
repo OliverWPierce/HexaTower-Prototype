@@ -2,6 +2,7 @@ ProxyPiece (
     name: "Gandaldore",
     model_path: "pieces/piece_models/Wizard Hat.glb",
     health: 4,
+    default_coin_value: 1,
     is_win_condition: false,
     order1_path: None,
     order2_path: None,

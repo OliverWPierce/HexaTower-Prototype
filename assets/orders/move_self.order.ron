@@ -1,8 +1,8 @@
 ProxyOrder (
     name: "Hustle",
     proxy_action: ProxyAction (
-        functionality: DeleteTile,
-        eligibility_method: UnoccupiedTiles,
+        functionality: MoveSelf,
+        eligibility_method: Fan (width: Five, depth: 4, occupied_or_not: Vacant),
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 5)),
         ),
     description: "This order does nothing... for now..",

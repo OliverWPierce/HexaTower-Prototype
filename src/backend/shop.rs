@@ -154,14 +154,10 @@ pub struct CoinBag {
     pub coins: i32,
 }
 #[derive(Debug, Event)]
-pub struct ChangeActivePlayerCoinsBy(pub i32);
+pub struct ChangePlayerCoinsBy(pub i32, pub Entity);
 
-fn change_coins(
-    change: On<ChangeActivePlayerCoinsBy>,
-    active_player: Res<ActivePlayer>,
-    mut coins: Query<&mut CoinBag>,
-) {
-    let Ok(mut player_coins) = coins.get_mut(active_player.0) else {
+fn change_coins(change: On<ChangePlayerCoinsBy>, mut coins: Query<&mut CoinBag>) {
+    let Ok(mut player_coins) = coins.get_mut(change.1) else {
         warn!("The player had no coinbag.");
         return;
     };

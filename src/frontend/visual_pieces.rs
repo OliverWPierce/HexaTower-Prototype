@@ -6,7 +6,7 @@ use crate::{
         game_parameters::SetUpBoard,
         pieces::{
             ActiveLogPiece, LogPieceDespawned, LogPieceOwnedByPlayer, OccupiesTile, Piece,
-            SetPieceToActive, SpawnedLogPieceInfo,
+            PieceMoved, SetPieceToActive, SpawnedLogPieceInfo,
         },
         tiles::LogicalTileLocation,
     },
@@ -27,6 +27,7 @@ impl Plugin for VisPiecesPlugin {
                 spawn_peice_visuals,
                 scale_visuals,
                 start_scale_out_for_destroyed_pieces,
+                visually_move_pieces,
             )
                 .in_set(FrontEndSystems),
         );
@@ -296,5 +297,34 @@ fn tmp_animate_indicator(
         transform.translation.y = sin(anim_data.t.elapsed_secs() + anim_data.offset * HOVER_SPEED)
             * HOVER_MAGNITUDE
             + HOVER_HEIGHT;
+    }
+}
+
+fn visually_move_pieces(
+    log_tiles: Query<&LogicalTileLocation>,
+    log_pieces: Query<&OccupiesTile>,
+    mut vis_pieces: Query<(&mut Transform, &VisPieceOf)>,
+    mut moved_pieces: MessageReader<PieceMoved>,
+) {
+    for PieceMoved(log_piece) in moved_pieces.read() {
+        let Ok(new_tile) = log_pieces.get(*log_piece) else {
+            error!("A log piece did not occupy a tile");
+            continue;
+        };
+
+        let Ok(new_position) = log_tiles.get(new_tile.log_tile) else {
+            error!("A log tile had no logical location.");
+            continue;
+        };
+
+        for (mut transform, visualizes_piece) in vis_pieces.iter_mut() {
+            if visualizes_piece.0 == *log_piece {
+                *transform = Transform {
+                    translation: Vec3::new(new_position.read().x, 0.0, new_position.read().y),
+                    ..Default::default()
+                };
+                break;
+            }
+        }
     }
 }

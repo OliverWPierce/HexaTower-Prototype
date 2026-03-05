@@ -147,9 +147,9 @@ fn validate_and_sort_newly_loaded_cards(
                     continue;
                 };
 
-                if !card.action.is_valid() {
+                if !card.action.is_valid_for_card() {
                     error!(
-                        "The action associated with card {} fails validation, as it is in contradiction with the code's capabilities.",
+                        "The action associated with card {} is in contradiction with the code's capabilities.",
                         card.name
                     );
                     continue;

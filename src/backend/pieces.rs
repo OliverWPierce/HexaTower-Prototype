@@ -9,7 +9,8 @@ use crate::backend::{
     game_actions::{
         ExecuteSelectedAction, GameAction, ProxyAction, SetActionTo, execute_action_functionality,
     },
-    players::CheckForWinner,
+    players::{CheckForWinner, StartTurn},
+    shop::ChangePlayerCoinsBy,
 };
 
 pub struct PiecesPlugin;
@@ -34,11 +35,15 @@ impl Plugin for PiecesPlugin {
 
         app.add_systems(
             ExecuteSelectedAction,
-            (damage_piece).after(execute_action_functionality),
+            (damage_piece, clear_active).after(execute_action_functionality),
         );
+
+        app.add_systems(StartTurn, clear_active.in_set(BackEndSystems));
 
         app.add_observer(set_active_piece);
         app.add_message::<DamagePiece>();
+        app.add_message::<PieceMoved>();
+        app.add_observer(move_piece);
     }
 }
 
@@ -47,6 +52,7 @@ struct ProxyPiece {
     name: String,
     model_path: String,
     health: u32,
+    default_coin_value: u32,
     is_win_condition: bool,
 
     // It would be simpler to store these as a vector, but having separate feilds is clearer to modders and prevents inncorrect situations, since the code is only designed to handle five orders per peice.
@@ -126,6 +132,7 @@ pub struct Piece {
     pub name: String,
     pub model: Handle<Scene>,
     pub health: u32,
+    pub default_coin_value: u32,
     pub default_orders: [Option<Handle<Order>>; 5],
     pub is_win_condtion: bool,
 }
@@ -164,6 +171,7 @@ impl AssetLoader for PieceAssetLoader {
             model: load_context.load(GltfAssetLabel::Scene(0).from_asset(proxy.model_path)),
             health: proxy.health,
             is_win_condtion: proxy.is_win_condition,
+            default_coin_value: proxy.default_coin_value,
             default_orders: [
                 proxy.order1_path.map(|path| load_context.load(path)),
                 proxy.order2_path.map(|path| load_context.load(path)),
@@ -235,6 +243,22 @@ pub struct Health {
 #[derive(Debug, Component)]
 pub struct WinCondition;
 
+#[derive(Debug, Component)]
+struct MonataryValue(u32);
+
+#[derive(Debug, Component)]
+pub struct FacingDirection(pub u8);
+
+impl FacingDirection {
+    pub fn offset_index(&self, offset: i8) -> u8 {
+        let current_index = self.0 as i8;
+
+        let corrected_offset = offset.abs() % 6;
+
+        (((current_index + 6) + corrected_offset * offset.signum()) % 6) as u8
+    }
+}
+
 fn spawn_logpiece(
     mut spawn_requests: MessageReader<SpawnLogPiece>,
     mut commands: Commands,
@@ -264,11 +288,13 @@ fn spawn_logpiece(
                     OccupiesTile {
                         log_tile: *log_tile,
                     },
+                    FacingDirection(0),
                     Health {
                         max_health: piece_instructions.health,
                         current_health: piece_instructions.health,
                     },
                     PieceOrders(piece_instructions.default_orders.clone()),
+                    MonataryValue(piece_instructions.default_coin_value),
                 ))
                 .id();
 
@@ -301,6 +327,10 @@ pub struct ActiveLogPiece(pub Option<Entity>);
 
 #[derive(Event)]
 pub struct SetPieceToActive(pub Option<Entity>);
+
+fn clear_active(mut commands: Commands) {
+    commands.trigger(SetPieceToActive(None));
+}
 
 fn set_active_piece(
     new_piece: On<SetPieceToActive>,
@@ -339,7 +369,7 @@ pub enum DamageType {
 
 fn damage_piece(
     mut reader: MessageReader<DamagePiece>,
-    mut pieces: Query<(&mut Health, Has<WinCondition>)>,
+    mut pieces: Query<(&mut Health, Has<WinCondition>, &MonataryValue)>,
     mut commands: Commands,
 ) {
     for DamagePiece {
@@ -348,7 +378,7 @@ fn damage_piece(
         source_player,
     } in reader.read()
     {
-        let Ok((mut health, win_condition)) = pieces.get_mut(*log_piece) else {
+        let Ok((mut health, win_condition, value)) = pieces.get_mut(*log_piece) else {
             error!("Received a message to damage an entity which was not a piece");
             return;
         };
@@ -365,7 +395,11 @@ fn damage_piece(
 
         if new_health == 0 {
             commands.entity(*log_piece).despawn();
-            println!("Player {:?} killed a piece", source_player);
+
+            if let Some(player) = source_player {
+                commands.trigger(ChangePlayerCoinsBy(value.0 as i32, *player));
+            }
+
             if win_condition {
                 commands.trigger(CheckForWinner);
             }
@@ -373,4 +407,24 @@ fn damage_piece(
             health.current_health = new_health;
         }
     }
+}
+#[derive(Debug, Event)]
+pub struct MovePiece {
+    pub log_piece: Entity,
+    pub target_tile: Entity,
+}
+#[derive(Debug, Message)]
+pub struct PieceMoved(pub Entity);
+
+fn move_piece(
+    instructions: On<MovePiece>,
+    mut commands: Commands,
+    mut notify_of_movement: MessageWriter<PieceMoved>,
+) {
+    commands
+        .entity(instructions.log_piece)
+        .insert(OccupiesTile {
+            log_tile: instructions.target_tile,
+        });
+    notify_of_movement.write(PieceMoved(instructions.log_piece));
 }

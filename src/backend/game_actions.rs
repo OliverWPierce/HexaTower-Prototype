@@ -5,9 +5,12 @@ use crate::backend::{
     BackEndSystems,
     game_actions::dangerous_selection_mechanics::{SelectedLogTiles, TileSelectionStatus},
     game_parameters::SetUpBoard,
-    pieces::{DamagePiece, DamageType, OccupiedByPiece, Piece, SpawnLogPiece},
+    pieces::{
+        ActiveLogPiece, DamagePiece, DamageType, FacingDirection, MovePiece, OccupiedByPiece,
+        OccupiesTile, Piece, SpawnLogPiece,
+    },
     players::{ActivePlayer, StartTurn},
-    shop::ChangeActivePlayerCoinsBy,
+    shop::ChangePlayerCoinsBy,
     tiles::{
         AdjacentTiles, DeleteLogTileRequest, EssentialTileCreationSystems, LogicalTileCreated,
     },
@@ -61,21 +64,27 @@ pub struct ProxyAction {
     selection_count_bounds: GameDesignBounds,
 }
 #[derive(Debug, Deserialize, Serialize, Reflect, Clone)]
-pub enum ProxyActionFunctionality {
+enum ProxyActionFunctionality {
     DeleteTile,
     SpawnPiece { path_to_proxy_piece: String },
     DoubleTakeTest { path_to_proxy_piece: String },
-    AlterCoinCount(i32),
+    AlterActivePlayerCoinCount(i32),
     AttackPiece(DamageType),
+    MoveSelf,
 }
 
 #[derive(Debug, Deserialize, Serialize, Reflect, Clone, Copy)]
-pub enum ProxyDeterminationMethod {
+enum ProxyDeterminationMethod {
     AllTiles,
     AllPieces,
     UnoccupiedTiles,
     PieceChain,
     None,
+    Fan {
+        width: FanWidth,
+        depth: u32,
+        occupied_or_not: OccupationStatus,
+    },
 }
 
 impl GameAction {
@@ -88,12 +97,13 @@ impl GameAction {
             ProxyActionFunctionality::DoubleTakeTest {
                 path_to_proxy_piece,
             } => ActionFunctionality::DoubleTakeTest(loader.load(path_to_proxy_piece)),
-            ProxyActionFunctionality::AlterCoinCount(change) => {
-                ActionFunctionality::AlterCoinCount(change)
+            ProxyActionFunctionality::AlterActivePlayerCoinCount(change) => {
+                ActionFunctionality::AlterActivePlayerCoinCount(change)
             }
             ProxyActionFunctionality::AttackPiece(damage_type) => {
                 ActionFunctionality::AttackPiece(damage_type)
             }
+            ProxyActionFunctionality::MoveSelf => ActionFunctionality::MoveSelfToTile,
         };
 
         let converted_action_method = match proxy.eligibility_method {
@@ -104,6 +114,15 @@ impl GameAction {
             }
             ProxyDeterminationMethod::PieceChain => EligibilityDeterminationMethod::PieceChain,
             ProxyDeterminationMethod::None => EligibilityDeterminationMethod::None,
+            ProxyDeterminationMethod::Fan {
+                width,
+                depth,
+                occupied_or_not,
+            } => EligibilityDeterminationMethod::Fan {
+                width,
+                depth,
+                occupied_or_not,
+            },
         };
 
         GameAction {
@@ -123,24 +142,46 @@ pub enum ActionFunctionality {
     DeleteTile,
     SpawnPiece(Handle<Piece>),
     DoubleTakeTest(Handle<Piece>),
-    AlterCoinCount(i32),
+    AlterActivePlayerCoinCount(i32),
     AttackPiece(DamageType),
+    MoveSelfToTile,
+    RotateSelf,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum EligibilityDeterminationMethod {
+enum EligibilityDeterminationMethod {
     AllTiles,
     AllPieces,
     UnoccupiedTiles,
     PieceChain,
     None,
+    Fan {
+        width: FanWidth,
+        depth: u32,
+        occupied_or_not: OccupationStatus,
+    },
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize, Reflect, Copy)]
+enum OccupationStatus {
+    Vacant,
+    Occupied,
+    Either,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize, Reflect, Copy)]
+enum FanWidth {
+    One,
+    Three,
+    Five,
+    All,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct GameAction {
-    pub functionality: ActionFunctionality,
-    pub eligibility_method: EligibilityDeterminationMethod,
-    pub selection_count_bounds: GameDesignBounds,
+    functionality: ActionFunctionality,
+    eligibility_method: EligibilityDeterminationMethod,
+    selection_count_bounds: GameDesignBounds,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -162,12 +203,18 @@ pub enum SetActionTo {
 }
 
 impl GameAction {
-    pub fn is_valid(&self) -> bool {
+    fn is_valid(&self) -> bool {
         (self.bounds().min_tiles >= self.eligibility_method.bounds().min_tiles)
             && (self.bounds().min_tiles >= self.functionality.bounds().min_tiles)
             && self.bounds().max_tiles >= self.bounds().min_tiles
             && self.functionality.bounds().max_tiles >= self.bounds().max_tiles
             && self.eligibility_method.bounds().max_tiles >= self.bounds().max_tiles
+    }
+
+    pub fn is_valid_for_card(&self) -> bool {
+        self.is_valid()
+            && !self.eligibility_method.requires_active_piece()
+            && !self.functionality.requires_active_piece()
     }
 }
 
@@ -201,7 +248,7 @@ impl SelectionBounds for ActionFunctionality {
                 min_tiles: 2,
                 max_tiles: 2,
             },
-            ActionFunctionality::AlterCoinCount(_) => Bounds {
+            ActionFunctionality::AlterActivePlayerCoinCount(_) => Bounds {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
@@ -212,6 +259,14 @@ impl SelectionBounds for ActionFunctionality {
             ActionFunctionality::AttackPiece(_) => Bounds {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
+            },
+            ActionFunctionality::MoveSelfToTile => Bounds {
+                min_tiles: 1,
+                max_tiles: 1,
+            },
+            ActionFunctionality::RotateSelf => Bounds {
+                min_tiles: 1,
+                max_tiles: 1,
             },
         }
     }
@@ -240,6 +295,41 @@ impl SelectionBounds for EligibilityDeterminationMethod {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
+            EligibilityDeterminationMethod::Fan { .. } => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
+        }
+    }
+}
+
+pub trait RequiresActivePiece {
+    fn requires_active_piece(&self) -> bool;
+}
+
+impl RequiresActivePiece for EligibilityDeterminationMethod {
+    fn requires_active_piece(&self) -> bool {
+        match self {
+            EligibilityDeterminationMethod::AllTiles => false,
+            EligibilityDeterminationMethod::AllPieces => false,
+            EligibilityDeterminationMethod::UnoccupiedTiles => false,
+            EligibilityDeterminationMethod::PieceChain => false,
+            EligibilityDeterminationMethod::None => false,
+            EligibilityDeterminationMethod::Fan { .. } => true,
+        }
+    }
+}
+
+impl RequiresActivePiece for ActionFunctionality {
+    fn requires_active_piece(&self) -> bool {
+        match self {
+            ActionFunctionality::DeleteTile => false,
+            ActionFunctionality::SpawnPiece(..) => false,
+            ActionFunctionality::DoubleTakeTest(..) => false,
+            ActionFunctionality::AlterActivePlayerCoinCount(_) => false,
+            ActionFunctionality::AttackPiece(..) => false,
+            ActionFunctionality::MoveSelfToTile => true,
+            ActionFunctionality::RotateSelf => true,
         }
     }
 }
@@ -265,6 +355,7 @@ pub fn execute_action_functionality(
     mut damage_writer: MessageWriter<DamagePiece>,
     mut commands: Commands,
     map_tile_to_piece: Query<&OccupiedByPiece>,
+    active_piece: Res<ActiveLogPiece>,
 ) {
     let Some(GameAction { functionality, .. }) = action.0.clone() else {
         return;
@@ -295,8 +386,8 @@ pub fn execute_action_functionality(
                 log_tile: *selected_tiles.as_read_only_list().first().unwrap(),
             });
         }
-        ActionFunctionality::AlterCoinCount(delta_coins) => {
-            commands.trigger(ChangeActivePlayerCoinsBy(delta_coins));
+        ActionFunctionality::AlterActivePlayerCoinCount(delta_coins) => {
+            commands.trigger(ChangePlayerCoinsBy(delta_coins, active_plyer.0));
         }
         ActionFunctionality::AttackPiece(damage_type) => {
             for log_tile in selected_tiles.as_read_only_list() {
@@ -312,6 +403,13 @@ pub fn execute_action_functionality(
                 });
             }
         }
+        ActionFunctionality::MoveSelfToTile => {
+            commands.trigger(MovePiece {
+                log_piece: active_piece.0.unwrap(),
+                target_tile: *selected_tiles.as_read_only_list().first().unwrap(),
+            });
+        }
+        ActionFunctionality::RotateSelf => todo!(),
     }
 }
 
@@ -327,6 +425,8 @@ fn evaluate_tiles(
         &AdjacentTiles,
     )>,
     selected_tiles: Res<SelectedLogTiles>,
+    log_pieces: Query<(&OccupiesTile, &FacingDirection)>,
+    active_piece: Res<ActiveLogPiece>,
 ) {
     let Some(GameAction {
         eligibility_method,
@@ -407,6 +507,78 @@ fn evaluate_tiles(
             }
         }
         EligibilityDeterminationMethod::None => (),
+        EligibilityDeterminationMethod::Fan {
+            width,
+            depth,
+            occupied_or_not,
+        } => {
+            let Ok((basis_tile, basis_direction)) = log_pieces.get(active_piece.0.unwrap()) else {
+                debug!("could not find basis tile for fan selection.");
+                return;
+            };
+
+            let mut directional_indices_of_fan = Vec::new();
+
+            match width {
+                FanWidth::One => directional_indices_of_fan.push(basis_direction.0),
+                FanWidth::Three => {
+                    directional_indices_of_fan.push(basis_direction.offset_index(-1));
+                    directional_indices_of_fan.push(basis_direction.offset_index(1));
+                    directional_indices_of_fan.push(basis_direction.0);
+                }
+                FanWidth::Five => {
+                    directional_indices_of_fan.push(basis_direction.offset_index(-1));
+                    directional_indices_of_fan.push(basis_direction.offset_index(1));
+                    directional_indices_of_fan.push(basis_direction.offset_index(-2));
+                    directional_indices_of_fan.push(basis_direction.offset_index(2));
+                    directional_indices_of_fan.push(basis_direction.0);
+                }
+                FanWidth::All => {
+                    directional_indices_of_fan = vec![0, 1, 2, 3, 4, 5];
+                }
+            }
+
+            let mut eligible_tiles = vec![basis_tile.log_tile];
+
+            for _ in 0..depth {
+                for tile in eligible_tiles.clone() {
+                    for direction in &directional_indices_of_fan {
+                        let Ok((_, _, adjacents)) = tiles.get(tile) else {
+                            panic!()
+                        };
+
+                        let Some(adjacent_tile) = adjacents.0[*direction as usize] else {
+                            continue;
+                        };
+
+                        let Ok((mut selection_state, is_occupied, ..)) =
+                            tiles.get_mut(adjacent_tile)
+                        else {
+                            panic!()
+                        };
+
+                        match occupied_or_not {
+                            OccupationStatus::Vacant => {
+                                if !is_occupied {
+                                    eligible_tiles.push(adjacent_tile);
+                                    selection_state.try_make_eligible();
+                                }
+                            }
+                            OccupationStatus::Occupied => {
+                                if is_occupied {
+                                    eligible_tiles.push(adjacent_tile);
+                                    selection_state.try_make_eligible();
+                                }
+                            }
+                            OccupationStatus::Either => {
+                                eligible_tiles.push(adjacent_tile);
+                                selection_state.try_make_eligible();
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
