@@ -7,7 +7,7 @@ use crate::backend::{
     game_parameters::SetUpBoard,
     pieces::{
         ActiveLogPiece, DamagePiece, DamageType, FacingDirection, MovePiece, OccupiedByPiece,
-        OccupiesTile, Piece, SpawnLogPiece,
+        OccupiesTile, Piece, RotatePiece, SpawnLogPiece,
     },
     players::{ActivePlayer, StartTurn},
     shop::ChangePlayerCoinsBy,
@@ -71,6 +71,7 @@ enum ProxyActionFunctionality {
     AlterActivePlayerCoinCount(i32),
     AttackPiece(DamageType),
     MoveSelf,
+    RotateSelf,
 }
 
 #[derive(Debug, Deserialize, Serialize, Reflect, Clone, Copy)]
@@ -85,6 +86,7 @@ enum ProxyDeterminationMethod {
         depth: u32,
         occupied_or_not: OccupationStatus,
     },
+    RotateSelf,
 }
 
 impl GameAction {
@@ -104,6 +106,7 @@ impl GameAction {
                 ActionFunctionality::AttackPiece(damage_type)
             }
             ProxyActionFunctionality::MoveSelf => ActionFunctionality::MoveSelfToTile,
+            ProxyActionFunctionality::RotateSelf => ActionFunctionality::RotateSelf,
         };
 
         let converted_action_method = match proxy.eligibility_method {
@@ -122,6 +125,11 @@ impl GameAction {
                 width,
                 depth,
                 occupied_or_not,
+            },
+            ProxyDeterminationMethod::RotateSelf => EligibilityDeterminationMethod::Fan {
+                width: FanWidth::All,
+                depth: 1,
+                occupied_or_not: OccupationStatus::Either,
             },
         };
 
@@ -145,6 +153,7 @@ pub enum ActionFunctionality {
     AlterActivePlayerCoinCount(i32),
     AttackPiece(DamageType),
     MoveSelfToTile,
+    /// This function assumes that only adjacent tiles can be selected.
     RotateSelf,
 }
 
@@ -409,7 +418,12 @@ pub fn execute_action_functionality(
                 target_tile: *selected_tiles.as_read_only_list().first().unwrap(),
             });
         }
-        ActionFunctionality::RotateSelf => todo!(),
+        ActionFunctionality::RotateSelf => {
+            commands.trigger(RotatePiece {
+                log_piece: active_piece.0.unwrap(),
+                target_tile: *selected_tiles.as_read_only_list().first().unwrap(),
+            });
+        }
     }
 }
 

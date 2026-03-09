@@ -11,6 +11,7 @@ use crate::backend::{
     },
     players::{CheckForWinner, StartTurn},
     shop::ChangePlayerCoinsBy,
+    tiles::AdjacentTiles,
 };
 
 pub struct PiecesPlugin;
@@ -43,6 +44,7 @@ impl Plugin for PiecesPlugin {
         app.add_observer(set_active_piece);
         app.add_message::<DamagePiece>();
         app.add_message::<PieceMoved>();
+        app.add_observer(rotate_piece);
         app.add_observer(move_piece);
     }
 }
@@ -427,4 +429,34 @@ fn move_piece(
             log_tile: instructions.target_tile,
         });
     notify_of_movement.write(PieceMoved(instructions.log_piece));
+}
+
+#[derive(Debug, Event)]
+pub struct RotatePiece {
+    pub log_piece: Entity,
+    pub target_tile: Entity,
+}
+
+fn rotate_piece(
+    event: On<RotatePiece>,
+    adjacencies: Query<&AdjacentTiles>,
+    mut piece_info: Query<(&OccupiesTile, &mut FacingDirection)>,
+) -> Result<(), BevyError> {
+    let (occupied_tile, mut current_direction) = piece_info.get_mut(event.log_piece)?;
+
+    for (direction, maybe_tile) in adjacencies
+        .get(occupied_tile.log_tile)?
+        .0
+        .iter()
+        .enumerate()
+    {
+        if let Some(tile) = maybe_tile
+            && *tile == event.target_tile
+        {
+            current_direction.0 = direction as u8;
+            break;
+        }
+    }
+
+    Ok(())
 }

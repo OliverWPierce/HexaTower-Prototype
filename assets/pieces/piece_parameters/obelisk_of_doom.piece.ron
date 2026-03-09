@@ -7,6 +7,6 @@ ProxyPiece (
     order1_path: Some("orders/delete_stuff.order.ron"),
     order2_path: Some("orders/move_self.order.ron"),
     order3_path: Some("orders/give_health.order.ron"),
-    order4_path: None,
+    order4_path: Some("orders/rotate_self.order.ron"),
     order5_path: None,
 )

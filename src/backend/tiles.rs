@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use hex_grid_tools::ADJACENTS;
+pub use hex_grid_tools::ADJACENTS;
 
 use crate::backend::BackEndSystems;
 use crate::backend::game_parameters::{BoardSize, SetUpBoard};
@@ -146,7 +146,7 @@ fn delete_tiles(
     }
 }
 
-mod hex_grid_tools {
+pub mod hex_grid_tools {
     use bevy::prelude::*;
     pub(super) const SQRT3: f32 = 1.7320508;
 
@@ -168,7 +168,7 @@ mod hex_grid_tools {
         cords: Vec2,
     }
 
-    pub(super) const ADJACENTS: [Vec2; 6] = [
+    pub const ADJACENTS: [Vec2; 6] = [
         vec2(1.5, 0.5 * SQRT3),
         vec2(0.0, SQRT3),
         vec2(-1.5, 0.5 * SQRT3),

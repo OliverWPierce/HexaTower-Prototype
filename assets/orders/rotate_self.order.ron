@@ -1,0 +1,10 @@
+ProxyOrder (
+    name: "Hustle",
+    proxy_action: ProxyAction (
+        functionality: RotateSelf,
+        eligibility_method: RotateSelf,
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
+        ),
+    description: "Reorient this piece so that it faces an adjacent tile.",
+    icon_path: "orders/icons/rotate.png"
+)

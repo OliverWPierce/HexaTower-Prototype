@@ -5,8 +5,8 @@ use crate::{
         game_actions::CurrentAction,
         game_parameters::SetUpBoard,
         pieces::{
-            ActiveLogPiece, LogPieceDespawned, LogPieceOwnedByPlayer, OccupiesTile, Piece,
-            PieceMoved, SetPieceToActive, SpawnedLogPieceInfo,
+            ActiveLogPiece, FacingDirection, LogPieceDespawned, LogPieceOwnedByPlayer,
+            OccupiesTile, Piece, PieceMoved, SetPieceToActive, SpawnedLogPieceInfo,
         },
         tiles::LogicalTileLocation,
     },
@@ -28,6 +28,7 @@ impl Plugin for VisPiecesPlugin {
                 scale_visuals,
                 start_scale_out_for_destroyed_pieces,
                 visually_move_pieces,
+                rotate_peices,
             )
                 .in_set(FrontEndSystems),
         );
@@ -113,7 +114,7 @@ fn spawn_peice_visuals(
             Transform {
                 translation: Vec3::new(physical_position.x, 0.0, physical_position.y),
                 scale: Vec3::ZERO,
-                ..Default::default()
+                rotation: Quat::default(),
             },
             VisPieceOf(*log_piece_entity),
             AnimationStopwatch {
@@ -319,12 +320,31 @@ fn visually_move_pieces(
 
         for (mut transform, visualizes_piece) in vis_pieces.iter_mut() {
             if visualizes_piece.0 == *log_piece {
-                *transform = Transform {
-                    translation: Vec3::new(new_position.read().x, 0.0, new_position.read().y),
-                    ..Default::default()
-                };
+                transform.translation =
+                    Vec3::new(new_position.read().x, 0.0, new_position.read().y);
                 break;
             }
         }
+    }
+}
+
+fn rotate_peices(
+    rotated_pieces: Option<Query<&FacingDirection, Changed<FacingDirection>>>,
+    vis_pieces: Query<(&VisPieceOf, &mut Transform)>,
+) {
+    if rotated_pieces.is_none() {
+        return;
+    }
+
+    let rotated_pieces = rotated_pieces.unwrap();
+
+    for (watches_log_piece, mut transform) in vis_pieces {
+        let Ok(direction) = rotated_pieces.get(watches_log_piece.0) else {
+            continue;
+        };
+
+        let look_to_cords = crate::backend::tiles::ADJACENTS[direction.0 as usize];
+
+        transform.look_to(Vec3::new(look_to_cords.x, 0.0, look_to_cords.y), Vec3::Y);
     }
 }
