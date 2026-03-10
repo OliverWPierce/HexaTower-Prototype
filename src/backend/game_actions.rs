@@ -6,10 +6,10 @@ use crate::backend::{
     game_actions::dangerous_selection_mechanics::{SelectedLogTiles, TileSelectionStatus},
     game_parameters::SetUpBoard,
     pieces::{
-        ActiveLogPiece, DamagePiece, DamageType, FacingDirection, MovePiece, OccupiedByPiece,
-        OccupiesTile, Piece, RotatePiece, SpawnLogPiece,
+        ActiveLogPiece, DamagePiece, DamageType, FacingDirection, LogPieceOwnedByPlayer, MovePiece,
+        OccupiedByPiece, OccupiesTile, OrdersPerTurn, Piece, RotatePiece, SpawnLogPiece,
     },
-    players::{ActivePlayer, StartTurn},
+    players::{ActivePlayer, PlayerOrdersRemaining, StartTurn},
     shop::ChangePlayerCoinsBy,
     tiles::{
         AdjacentTiles, DeleteLogTileRequest, EssentialTileCreationSystems, LogicalTileCreated,
@@ -31,7 +31,7 @@ impl Plugin for GameActionsPlugin {
 
         app.add_systems(
             ExecuteSelectedAction,
-            execute_action_functionality.in_set(BackEndSystems),
+            (execute_action_functionality, modify_orders_remaining).in_set(BackEndSystems),
         );
 
         app.add_systems(
@@ -710,19 +710,74 @@ pub mod dangerous_selection_mechanics {
 #[derive(Debug, Event)]
 pub struct ExecuteActionRequest;
 
+#[allow(clippy::too_many_arguments)]
 fn validate_execution_request(
     _request: On<ExecuteActionRequest>,
     mut commands: Commands,
     action: Res<CurrentAction>,
+    source: Res<CurrentSource>,
     selected_tiles: Res<SelectedLogTiles>,
-) {
-    let Some(action_info) = &action.0 else { return };
+    active_plyer: Res<ActivePlayer>,
+    active_piece: Res<ActiveLogPiece>,
+    player_orders_remaining: Query<&PlayerOrdersRemaining>,
+    piece_info: Query<(&OrdersPerTurn, &LogPieceOwnedByPlayer)>,
+) -> Result<(), BevyError> {
+    let Some(action_info) = &action.0 else {
+        return Ok(());
+    };
+
+    let Some(source) = &source.0 else {
+        return Ok(());
+    };
 
     let amount_selected = selected_tiles.as_read_only_list().len();
 
+    let order_count_ok = match source {
+        ActionSource::Order { .. } => {
+            let Some(piece) = active_piece.0 else {
+                warn!("tried to execute an order but there was no active piece.");
+                //its not really "ok" but since this issue isn't worth panicking over I don't want to emit a bevy error. In the future, this could be fixed with my own error type.
+                return Ok(());
+            };
+
+            let (
+                OrdersPerTurn {
+                    current: piece_orders_remaining,
+                    ..
+                },
+                LogPieceOwnedByPlayer(owner),
+            ) = piece_info.get(piece)?;
+
+            player_orders_remaining.get(active_plyer.0)?.0 > 0
+                && *piece_orders_remaining > 0
+                && *owner == active_plyer.0
+        }
+        _ => true,
+    };
+
     if amount_selected >= action_info.functionality.bounds().min_tiles
         && amount_selected <= action_info.functionality.bounds().max_tiles
+        && order_count_ok
     {
         commands.run_schedule(ExecuteSelectedAction);
     }
+
+    Ok(())
+}
+
+fn modify_orders_remaining(
+    active_piece: Res<ActiveLogPiece>,
+    current_source: Res<CurrentSource>,
+    active_player: Res<ActivePlayer>,
+    mut player_orders: Query<&mut PlayerOrdersRemaining>,
+    mut piece_orders: Query<&mut OrdersPerTurn>,
+) -> Result<(), BevyError> {
+    if let Some(source) = current_source.0
+        && let ActionSource::Order { .. } = source
+        && let Some(piece) = active_piece.0
+    {
+        player_orders.get_mut(active_player.0)?.0 -= 1;
+        piece_orders.get_mut(piece)?.current -= 1;
+    }
+    Ok(())
 }

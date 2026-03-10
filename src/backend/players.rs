@@ -4,7 +4,7 @@ use crate::backend::{
     BackEndSystems,
     game_actions::ClearBackendData,
     game_parameters::SetUpBoard,
-    pieces::{LogPieceOwnedByPlayer, OwnsLogPieces, WinCondition},
+    pieces::{CommandPoint, LogPieceOwnedByPlayer, OwnsLogPieces, WinCondition},
 };
 
 pub struct PlayersPlugin;
@@ -21,6 +21,8 @@ impl Plugin for PlayersPlugin {
             SetUpBoard,
             remove_resource_with_player_creation_instructions.in_set(ClearBackendData),
         );
+
+        app.add_systems(StartTurn, calculate_player_orders_this_turn);
 
         //TMP systems!!!
         app.add_systems(Update, tmp_update_and_check_start_delay);
@@ -43,6 +45,9 @@ pub struct ActivePlayer(pub Entity);
 #[derive(Debug, Message, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct CreatedLogPlayer(pub Entity, pub usize);
 
+#[derive(Debug, Component)]
+pub struct PlayerOrdersRemaining(pub u32);
+
 pub fn create_basic_players(
     qued_players: Res<PlayersToCreate>,
     mut commands: Commands,
@@ -51,7 +56,9 @@ pub fn create_basic_players(
     let mut players_created = Vec::new();
 
     for (index, _) in qued_players.0.iter().enumerate() {
-        let new_player = commands.spawn((PlayerMarker, PlayerState::Alive)).id();
+        let new_player = commands
+            .spawn((PlayerMarker, PlayerState::Alive, PlayerOrdersRemaining(0)))
+            .id();
         created_players.write(CreatedLogPlayer(new_player, index));
 
         players_created.push(new_player);
@@ -106,6 +113,21 @@ fn switch_player(
     active.0 = next.next_player;
 
     commands.run_schedule(StartTurn);
+}
+
+fn calculate_player_orders_this_turn(
+    active_player: Res<ActivePlayer>,
+    pieces: Query<&LogPieceOwnedByPlayer, With<CommandPoint>>,
+    mut orders_this_turn: Query<&mut PlayerOrdersRemaining>,
+) -> Result<(), BevyError> {
+    let extra_commands = pieces
+        .iter()
+        .filter(|LogPieceOwnedByPlayer(owner)| *owner == active_player.0)
+        .count();
+
+    orders_this_turn.get_mut(active_player.0)?.0 = 2 + extra_commands as u32;
+
+    Ok(())
 }
 
 /// The purpose of this is to wait for all background assets to load before starting the first turn. Later, it should be replaced with an actual system for tracking loaded assets.

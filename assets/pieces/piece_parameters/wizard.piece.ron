@@ -4,6 +4,7 @@ ProxyPiece (
     health: 4,
     default_coin_value: 1,
     is_win_condition: false,
+    should_give_player_extra_command: false,
     order1_path: None,
     order2_path: None,
     order3_path: None,

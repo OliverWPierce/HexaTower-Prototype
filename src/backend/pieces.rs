@@ -56,6 +56,7 @@ struct ProxyPiece {
     health: u32,
     default_coin_value: u32,
     is_win_condition: bool,
+    should_give_player_extra_command: bool,
 
     // It would be simpler to store these as a vector, but having separate feilds is clearer to modders and prevents inncorrect situations, since the code is only designed to handle five orders per peice.
     order1_path: Option<String>,
@@ -137,6 +138,7 @@ pub struct Piece {
     pub default_coin_value: u32,
     pub default_orders: [Option<Handle<Order>>; 5],
     pub is_win_condtion: bool,
+    pub should_give_player_extra_command: bool,
 }
 
 #[derive(Debug, Default, TypePath)]
@@ -174,6 +176,7 @@ impl AssetLoader for PieceAssetLoader {
             health: proxy.health,
             is_win_condtion: proxy.is_win_condition,
             default_coin_value: proxy.default_coin_value,
+            should_give_player_extra_command: proxy.should_give_player_extra_command,
             default_orders: [
                 proxy.order1_path.map(|path| load_context.load(path)),
                 proxy.order2_path.map(|path| load_context.load(path)),
@@ -261,6 +264,14 @@ impl FacingDirection {
     }
 }
 
+#[derive(Debug, Component)]
+pub struct OrdersPerTurn {
+    pub max: u32,
+    pub current: u32,
+}
+#[derive(Debug, Component)]
+pub struct CommandPoint;
+
 fn spawn_logpiece(
     mut spawn_requests: MessageReader<SpawnLogPiece>,
     mut commands: Commands,
@@ -287,6 +298,7 @@ fn spawn_logpiece(
             let logpiece_ent = commands
                 .spawn((
                     LogPieceOwnedByPlayer(*player),
+                    OrdersPerTurn { max: 1, current: 1 },
                     OccupiesTile {
                         log_tile: *log_tile,
                     },
@@ -302,6 +314,10 @@ fn spawn_logpiece(
 
             if piece_instructions.is_win_condtion {
                 commands.entity(logpiece_ent).insert(WinCondition);
+            }
+
+            if piece_instructions.should_give_player_extra_command {
+                commands.entity(logpiece_ent).insert(CommandPoint);
             }
 
             notify_of_spawns.write(SpawnedLogPieceInfo {

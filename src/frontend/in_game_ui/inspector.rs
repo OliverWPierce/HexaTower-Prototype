@@ -1,5 +1,5 @@
 use bevy::{
-    color::palettes::tailwind::{EMERALD_500, SLATE_600, SLATE_800, SLATE_900},
+    color::palettes::tailwind::{EMERALD_500, RED_600, SLATE_600, SLATE_800, SLATE_900},
     prelude::*,
 };
 
@@ -7,7 +7,9 @@ use crate::{
     backend::{
         cards::Card,
         game_parameters::SetUpBoard,
-        pieces::{ActiveLogPiece, Health, LogPieceOwnedByPlayer, Order, PieceOrders},
+        pieces::{
+            ActiveLogPiece, Health, LogPieceOwnedByPlayer, Order, OrdersPerTurn, PieceOrders,
+        },
     },
     frontend::{
         in_game_ui::{RightPanelEnt, execute_action_button, order_display::ButtonForOrderAtIndex},
@@ -213,14 +215,14 @@ fn inspect_piece(
     mut commands: Commands,
     inspector: Single<Entity, With<InspectorPanel>>,
     vis_pieces: Query<(&VisPieceOf, &PieceName)>,
-    log_pieces: Query<(&Health, &LogPieceOwnedByPlayer)>,
+    log_pieces: Query<(&Health, &LogPieceOwnedByPlayer, &OrdersPerTurn)>,
     player_vis_data: Query<(&DisplayName, &DataForPlayer)>,
 ) {
     let Ok((log_piece_ent, name)) = vis_pieces.get(over.entity) else {
         return;
     };
 
-    let Ok((health_data, commanding_player)) = log_pieces.get(log_piece_ent.0) else {
+    let Ok((health_data, commanding_player, order_stats)) = log_pieces.get(log_piece_ent.0) else {
         error!("The visual piece did not point to a logical piece");
         return;
     };
@@ -277,6 +279,38 @@ fn inspect_piece(
         ));
         break;
     }
+
+    commands.spawn((
+        ChildOf(inspector),
+        Node {
+            width: Val::Percent(90.0),
+            padding: UiRect::all(Val::Px(3.0)),
+            border: UiRect::all(Val::Percent(0.5)),
+            justify_content: JustifyContent::SpaceAround,
+            align_items: AlignItems::Center,
+            flex_direction: FlexDirection::Column,
+            ..Default::default()
+        },
+        BorderRadius::all(Val::Px(15.0)),
+        BorderColor::all(Color::Srgba(SLATE_800)),
+        children![
+            (
+                Text::new("Remaining Orders"),
+                TextFont {
+                    font_size: 24.0,
+                    ..default()
+                }
+            ),
+            (
+                Text::new(format!("{}/{}", order_stats.current, order_stats.max)),
+                TextFont {
+                    font_size: 24.0,
+                    ..default()
+                },
+                TextColor(RED_600.into())
+            )
+        ],
+    ));
 
     let health_panel = commands
         .spawn((

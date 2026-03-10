@@ -4,6 +4,7 @@ ProxyPiece (
     health: 20,
     default_coin_value: 12,
     is_win_condition: true,
+    should_give_player_extra_command: true,
     order1_path: Some("orders/delete_stuff.order.ron"),
     order2_path: Some("orders/move_self.order.ron"),
     order3_path: Some("orders/give_health.order.ron"),
