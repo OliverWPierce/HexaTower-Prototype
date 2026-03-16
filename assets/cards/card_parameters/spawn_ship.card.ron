@@ -8,7 +8,7 @@ ProxyCard (
         eligibility_method: UnoccupiedTiles,
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
         ),
-    image_path: "cards/card_images/RedDowngrade.png",
-    rarity: Legendary,
+    image_path: "cards/card_images/SpaceshipSpawn.png",
+    rarity: Rare,
     description: "Spawn one ship onto unnoccupied tile."
 )

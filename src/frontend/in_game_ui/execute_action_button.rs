@@ -5,6 +5,7 @@ use crate::{
             ExecuteActionRequest, SelectionBounds, dangerous_selection_mechanics::SelectedLogTiles,
         },
         game_parameters::SetUpBoard,
+        players::{ActivePlayer, PlayerOrdersRemaining},
     },
     frontend::{
         FrontEndSystems,
@@ -12,7 +13,10 @@ use crate::{
         inputs::ClickCounter,
     },
 };
-use bevy::{color::palettes::tailwind, prelude::*};
+use bevy::{
+    color::palettes::tailwind::{self, SLATE_600, SLATE_800},
+    prelude::*,
+};
 
 pub struct ExecuteActionButtonPlugin;
 
@@ -20,7 +24,14 @@ impl Plugin for ExecuteActionButtonPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(send_execute_actions);
 
-        app.add_systems(SetUpBoard, add_button.after(create_panels));
+        app.add_systems(
+            SetUpBoard,
+            (add_button, create_orders_remaining_display)
+                .chain()
+                .after(create_panels),
+        );
+
+        app.add_systems(Update, update_orders_remaining.in_set(FrontEndSystems));
 
         app.add_systems(
             ActionOrSelectionChanged,
@@ -180,4 +191,49 @@ fn send_execute_actions(
         meaningful_clicks.0 += 1;
         commands.trigger(ExecuteActionRequest);
     }
+}
+
+#[derive(Debug, Component)]
+struct PlayerOrdersRemainingDisplay;
+
+pub fn create_orders_remaining_display(mut commands: Commands, right_panel: Res<RightPanelEnt>) {
+    commands.spawn((
+        ChildOf(right_panel.0),
+        Node {
+            width: Val::Percent(95.0),
+            border: UiRect::all(Val::Percent(2.0)),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            padding: UiRect::top(Val::Percent(2.0)).with_bottom(Val::Percent(2.0)),
+            ..default()
+        },
+        BackgroundColor(SLATE_600.into()),
+        BorderColor::all(SLATE_800),
+        children![(
+            Text::new("display orders remaining..."),
+            TextFont {
+                font_size: 24.0,
+                ..default()
+            },
+            PlayerOrdersRemainingDisplay,
+            TextLayout {
+                justify: Justify::Center,
+                linebreak: LineBreak::WordBoundary
+            }
+        )],
+    ));
+}
+
+fn update_orders_remaining(
+    mut text: Single<&mut Text, With<PlayerOrdersRemainingDisplay>>,
+    active_player: Res<ActivePlayer>,
+    orders_remaing: Query<&PlayerOrdersRemaining>,
+) -> Result<(), BevyError> {
+    text.0 = format!(
+        "You can give {} more orders this turn.",
+        orders_remaing.get(active_player.0)?.0
+    );
+
+    Ok(())
 }

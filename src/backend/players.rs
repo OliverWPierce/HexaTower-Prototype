@@ -4,7 +4,7 @@ use crate::backend::{
     BackEndSystems,
     game_actions::ClearBackendData,
     game_parameters::SetUpBoard,
-    pieces::{CommandPoint, LogPieceOwnedByPlayer, OwnsLogPieces, WinCondition},
+    pieces::{CommandPoint, LogPieceOwnedByPlayer, OrdersPerTurn, OwnsLogPieces, WinCondition},
 };
 
 pub struct PlayersPlugin;
@@ -110,9 +110,31 @@ fn switch_player(
         return;
     };
 
+    commands.run_system_cached(replenish_piece_orders);
     active.0 = next.next_player;
 
     commands.run_schedule(StartTurn);
+}
+
+fn replenish_piece_orders(
+    active_player: Res<ActivePlayer>,
+    players: Query<&OwnsLogPieces>,
+    mut pieces: Query<&mut OrdersPerTurn>,
+) -> Result<(), BevyError> {
+    let Ok(owned_pieces) = players.get(active_player.0) else {
+        warn!("failed get player owned pieces");
+        return Ok(());
+    };
+
+    for piece in owned_pieces.list() {
+        let Ok(mut order_stats) = pieces.get_mut(*piece) else {
+            warn!("failed get piece");
+            return Ok(());
+        };
+        order_stats.current = order_stats.max;
+    }
+
+    Ok(())
 }
 
 fn calculate_player_orders_this_turn(

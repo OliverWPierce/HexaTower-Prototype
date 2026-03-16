@@ -59,10 +59,10 @@ pub struct PlayerShopLuckStats {
 impl Default for PlayerShopLuckStats {
     fn default() -> Self {
         Self {
-            legendary: 1,
-            epic: 2,
-            rare: 5,
-            common: 10,
+            legendary: 2,
+            epic: 8,
+            rare: 20,
+            common: 40,
         }
     }
 }

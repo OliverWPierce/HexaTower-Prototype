@@ -8,7 +8,7 @@ ProxyCard (
         eligibility_method: UnoccupiedTiles,
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
         ),
-    image_path: "cards/card_images/Dot.png",
+    image_path: "cards/card_images/TowerSpawn.png",
     rarity: Rare,
     description: "Spawn a tower on any unnoccupied tile."
 )

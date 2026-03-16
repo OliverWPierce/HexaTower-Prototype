@@ -46,10 +46,10 @@ pub const BORDER_WIDTH: Val = Val::Percent(0.2);
 impl CardRarity {
     fn card_color(&self) -> Color {
         match self {
-            CardRarity::Legendary => tailwind::ROSE_600.into(),
-            CardRarity::Epic => tailwind::PURPLE_600.into(),
-            CardRarity::Rare => tailwind::TEAL_600.into(),
-            CardRarity::Common => tailwind::STONE_600.into(),
+            CardRarity::Legendary => tailwind::ROSE_300.into(),
+            CardRarity::Epic => tailwind::PURPLE_300.into(),
+            CardRarity::Rare => tailwind::TEAL_300.into(),
+            CardRarity::Common => tailwind::STONE_300.into(),
         }
     }
 

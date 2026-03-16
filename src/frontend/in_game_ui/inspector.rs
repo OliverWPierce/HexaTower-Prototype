@@ -24,7 +24,7 @@ impl Plugin for InspectorPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             SetUpBoard,
-            create_inspector_panel.after(execute_action_button::add_button),
+            create_inspector_panel.after(execute_action_button::create_orders_remaining_display),
         );
         app.add_observer(clear_inspector_panel);
         app.add_observer(inspect_piece);
@@ -295,7 +295,7 @@ fn inspect_piece(
         BorderColor::all(Color::Srgba(SLATE_800)),
         children![
             (
-                Text::new("Remaining Orders"),
+                Text::new("Receivable Orders"),
                 TextFont {
                     font_size: 24.0,
                     ..default()

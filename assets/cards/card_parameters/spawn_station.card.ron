@@ -8,7 +8,7 @@ ProxyCard (
         eligibility_method: UnoccupiedTiles,
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 2, max_tiles: 2)),
         ),
-    image_path: "cards/card_images/GoldSpawn.png",
+    image_path: "cards/card_images/SpaceStationSpawn.png",
     rarity: Epic,
     description: "Spawn Two commands points on any unnoccupied tile."
 )
