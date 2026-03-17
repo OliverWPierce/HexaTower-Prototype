@@ -1,10 +1,10 @@
 ProxyOrder (
-    name: "Sword",
+    name: "Smack!",
     proxy_action: ProxyAction (
         functionality: AttackPiece (Constant(30)),
         eligibility_method: Fan (width: All, depth: 1, occupied_or_not: Occupied),
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
         ),
     description: "Attack an ajacent piece for 30 damage",
-    icon_path: "orders/icons/directional_arrows.png"
+    icon_path: "orders/icons/sword.png"
 )

@@ -168,7 +168,7 @@ fn change_coins(change: On<ChangePlayerCoinsBy>, mut coins: Query<&mut CoinBag>)
 fn initialize_player_shop_data(players: Query<Entity, With<PlayerMarker>>, mut commands: Commands) {
     for player in players {
         commands.entity(player).insert((
-            CoinBag { coins: 35 },
+            CoinBag { coins: 20 },
             PlayerShopSetsInfo {
                 shop_sets: [
                     Some(ShopOfferSet::default().with_restock_data(0, 1)),

@@ -1,10 +1,10 @@
 ProxyOrder (
     name: "Longbow",
     proxy_action: ProxyAction (
-        functionality: AttackPiece (Constant(25)),
-        eligibility_method: Fan (width: Three, depth: 2, occupied_or_not: Occupied),
+        functionality: AttackPiece (Constant(20)),
+        eligibility_method: Fan (width: One, depth: 2, occupied_or_not: Occupied),
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
         ),
-    description: "Attack an ajacent piece for 25 damage",
-    icon_path: "orders/icons/directional_arrows.png"
+    description: "Attack one piece for 20 damage. The piece may be up to two tiles infront of the player",
+    icon_path: "orders/icons/Arrow.png",
 )

@@ -1,13 +1,13 @@
 ProxyPiece (
-    name: "The Centienial Hawk",
+    name: "Centienial Hawk",
     model_path: "pieces/piece_models/Cosmic Cargo Spaceship.glb",
-    health: 16,
+    health: 30,
     default_coin_value: 4,
     is_win_condition: false,
     should_give_player_extra_command: false,
-    order1_path: Some("orders/move_self.order.ron"),
+    order1_path: Some("orders/move1.order.ron"),
     order2_path: Some("orders/rotate_self.order.ron"),
-    order3_path: Some("orders/damage2.order.ron"),
-    order4_path: None,
+    order3_path: Some("orders/move2.order.ron"),
+    order4_path: Some("orders/damage1.order.ron"),
     order5_path: None,
 )

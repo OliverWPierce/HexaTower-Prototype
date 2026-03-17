@@ -1,0 +1,10 @@
+ProxyOrder (
+    name: "Battering Ram!",
+    proxy_action: ProxyAction (
+        functionality: AttackPiece (Constant(60)),
+        eligibility_method: Fan (width: One, depth: 1, occupied_or_not: Occupied),
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
+        ),
+    description: "Attack the piece in front for 60 damage.",
+    icon_path: "orders/icons/BatteringRam.png"
+)

@@ -6,7 +6,8 @@ use crate::{
         game_parameters::SetUpBoard,
         pieces::{
             ActiveLogPiece, FacingDirection, LogPieceDespawned, LogPieceOwnedByPlayer,
-            OccupiesTile, Piece, PieceMoved, SetPieceToActive, SpawnedLogPieceInfo,
+            OccupiesTile, Piece, PieceMoved, PieceOwnerChanged, SetPieceToActive,
+            SpawnedLogPieceInfo,
         },
         tiles::LogicalTileLocation,
     },
@@ -35,6 +36,7 @@ impl Plugin for VisPiecesPlugin {
 
         app.add_systems(SetUpBoard, init_active_ring_model);
         app.add_observer(set_active_request);
+        app.add_observer(replace_baseplates_of_transferred_pieces);
 
         app.add_systems(SetUpBoard, initialize_vis_error_model);
 
@@ -110,7 +112,6 @@ fn spawn_peice_visuals(
         };
 
         commands.spawn((
-            SceneRoot(base_plate_model.clone()),
             Transform {
                 translation: Vec3::new(physical_position.x, 0.0, physical_position.y),
                 scale: Vec3::ZERO,
@@ -122,17 +123,23 @@ fn spawn_peice_visuals(
                 scale_in: true,
             },
             PieceName(piece_instructions.name.clone()),
-            children![(
-                SceneRoot(piece_instructions.model.clone()),
-                Transform {
-                    translation: Vec3::new(0.0, PIECE_BASEPLATE_THICKNESS, 0.0),
-                    scale: Vec3::ONE,
-                    ..Default::default()
-                },
-            )],
+            InheritedVisibility::VISIBLE,
+            children![
+                (
+                    SceneRoot(piece_instructions.model.clone()),
+                    Transform {
+                        translation: Vec3::new(0.0, PIECE_BASEPLATE_THICKNESS, 0.0),
+                        scale: Vec3::ONE,
+                        ..Default::default()
+                    },
+                ),
+                (SceneRoot(base_plate_model.clone()), BasePlateModel,)
+            ],
         ));
     }
 }
+#[derive(Debug, Component)]
+struct BasePlateModel;
 
 fn scale_visuals(
     time: Res<Time>,
@@ -347,4 +354,43 @@ fn rotate_peices(
 
         transform.look_to(Vec3::new(look_to_cords.x, 0.0, look_to_cords.y), Vec3::Y);
     }
+}
+
+fn replace_baseplates_of_transferred_pieces(
+    event: On<PieceOwnerChanged>,
+    pieces: Query<&LogPieceOwnedByPlayer>,
+    vis_pieces: Query<(Entity, &VisPieceOf)>,
+    base_plate_models: Query<(&PieceBasePlateModel, &DataForPlayer)>,
+    old_plate_entites: Query<(Entity, &ChildOf), With<BasePlateModel>>,
+    mut commands: Commands,
+) -> Result<(), BevyError> {
+    let owner = pieces.get(event.piece)?.0;
+
+    let new_baseplate_model = &base_plate_models
+        .iter()
+        .find(|(_, player)| player.0 == owner)
+        .ok_or("Player has no baseplate.")?
+        .0
+        .0;
+
+    let vis_ent = vis_pieces
+        .iter()
+        .find(|(_, VisPieceOf(represented_piece))| *represented_piece == event.piece)
+        .ok_or("vis piece visualized non-existent log_piece")?
+        .0;
+
+    let old_plate_entity = old_plate_entites
+        .iter()
+        .find(|(_, child_of_vis_ent)| child_of_vis_ent.0 == vis_ent)
+        .ok_or("The visual_piece had no baseplate.")?
+        .0;
+
+    commands.entity(old_plate_entity).despawn();
+    commands.spawn((
+        SceneRoot(new_baseplate_model.clone()),
+        ChildOf(vis_ent),
+        BasePlateModel,
+    ));
+
+    Ok(())
 }

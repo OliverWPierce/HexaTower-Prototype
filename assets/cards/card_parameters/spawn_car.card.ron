@@ -1,0 +1,14 @@
+ProxyCard (
+    name: "Cannon-car Genesis",
+    price: 4,
+    action: ProxyAction (
+        functionality: SpawnPiece(
+            path_to_proxy_piece: "pieces/piece_parameters/car.piece.ron",
+        ),
+        eligibility_method: UnoccupiedTiles,
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
+        ),
+    image_path: "cards/card_images/CarSpawn.png",
+    rarity: Common,
+    description: "Spawn a car onto a tile... with a huge cannon attached! Limited mobility but can attack at range."
+)

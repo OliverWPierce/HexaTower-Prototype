@@ -6,9 +6,9 @@ ProxyCard (
             path_to_proxy_piece: "pieces/piece_parameters/space_station.piece.ron",
         ),
         eligibility_method: UnoccupiedTiles,
-        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 2, max_tiles: 2)),
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
         ),
     image_path: "cards/card_images/SpaceStationSpawn.png",
     rarity: Epic,
-    description: "Spawn Two commands points on any unnoccupied tile."
+    description: "Spawn one commands points on any unnoccupied tile."
 )

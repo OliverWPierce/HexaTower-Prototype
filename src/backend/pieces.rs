@@ -7,9 +7,10 @@ use thiserror::Error;
 use crate::backend::{
     BackEndSystems,
     game_actions::{
-        ExecuteSelectedAction, GameAction, ProxyAction, SetActionTo, execute_action_functionality,
+        ActionSource, Bounds, ExecuteSelectedAction, GameAction, GameDesignBounds, ProxyAction,
+        SetActionTo, dangerous_selection_mechanics::SelectLogTile, execute_action_functionality,
     },
-    players::{CheckForWinner, StartTurn},
+    players::{CheckForWinner, PlayerState, StartTurn},
     shop::ChangePlayerCoinsBy,
     tiles::AdjacentTiles,
 };
@@ -46,6 +47,7 @@ impl Plugin for PiecesPlugin {
         app.add_message::<PieceMoved>();
         app.add_observer(rotate_piece);
         app.add_observer(move_piece);
+        app.add_observer(transfer_pieces);
     }
 }
 
@@ -249,7 +251,7 @@ pub struct Health {
 pub struct WinCondition;
 
 #[derive(Debug, Component)]
-struct MonataryValue(u32);
+pub struct MonataryValue(pub u32);
 
 #[derive(Debug, Component)]
 pub struct FacingDirection(pub u8);
@@ -277,6 +279,7 @@ fn spawn_logpiece(
     mut commands: Commands,
     occupied_tiles: Query<Entity, With<OccupiedByPiece>>,
     mut notify_of_spawns: MessageWriter<SpawnedLogPieceInfo>,
+    mut make_player_alive: Query<&mut PlayerState>,
     pieces: Res<Assets<Piece>>,
 ) {
     for SpawnLogPiece {
@@ -302,7 +305,7 @@ fn spawn_logpiece(
                     OccupiesTile {
                         log_tile: *log_tile,
                     },
-                    FacingDirection(0),
+                    FacingDirection(4),
                     Health {
                         max_health: piece_instructions.health,
                         current_health: piece_instructions.health,
@@ -314,6 +317,10 @@ fn spawn_logpiece(
 
             if piece_instructions.is_win_condtion {
                 commands.entity(logpiece_ent).insert(WinCondition);
+                let Ok(mut state) = make_player_alive.get_mut(*player) else {
+                    panic!("The player had no life state");
+                };
+                *state = PlayerState::Alive;
             }
 
             if piece_instructions.should_give_player_extra_command {
@@ -354,6 +361,7 @@ fn set_active_piece(
     new_piece: On<SetPieceToActive>,
     mut current_piece: ResMut<ActiveLogPiece>,
     mut commands: Commands,
+    sale_info: Query<&OccupiesTile, With<PieceForSale>>,
 ) {
     if new_piece.0.is_none() {
         current_piece.0 = None;
@@ -364,11 +372,28 @@ fn set_active_piece(
         && new_piece.0.unwrap() == piece
     {
         current_piece.0 = None;
+        commands.trigger(SetActionTo::None);
     } else {
         current_piece.0 = new_piece.0;
-    }
 
-    commands.trigger(SetActionTo::None);
+        if let Ok(tile_occupied) = sale_info.get(new_piece.0.unwrap()) {
+            commands.trigger(SetActionTo::Action {
+                action: GameAction {
+                    functionality: super::game_actions::ActionFunctionality::PurchasePiece,
+                    eligibility_method:
+                        super::game_actions::EligibilityDeterminationMethod::PiecesForSale,
+                    selection_count_bounds: GameDesignBounds(Bounds {
+                        min_tiles: 1,
+                        max_tiles: 1,
+                    }),
+                },
+                source: ActionSource::OrphanPiecePurchasing,
+            });
+            commands.trigger(SelectLogTile(tile_occupied.log_tile));
+        } else {
+            commands.trigger(SetActionTo::None);
+        }
+    }
 }
 
 #[derive(Debug, Message)]
@@ -475,4 +500,26 @@ fn rotate_piece(
     }
 
     Ok(())
+}
+#[derive(Debug, Event)]
+pub struct TransferPieceOwnership {
+    pub piece: Entity,
+    pub to_player: Entity,
+}
+
+fn transfer_pieces(transfer_request: On<TransferPieceOwnership>, mut commands: Commands) {
+    commands
+        .entity(transfer_request.piece)
+        .insert(LogPieceOwnedByPlayer(transfer_request.to_player));
+
+    commands.trigger(PieceOwnerChanged {
+        piece: transfer_request.piece,
+    });
+}
+#[derive(Debug, Component)]
+pub struct PieceForSale;
+
+#[derive(Debug, Event)]
+pub struct PieceOwnerChanged {
+    pub piece: Entity,
 }

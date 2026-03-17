@@ -1,0 +1,10 @@
+ProxyOrder (
+    name: "Forward!",
+    proxy_action: ProxyAction (
+        functionality: MoveSelf,
+        eligibility_method: Fan (width: One, depth: 1, occupied_or_not: Vacant),
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
+        ),
+    description: "Move one tile in the forward direction.",
+    icon_path: "orders/icons/directional_arrows.png"
+)

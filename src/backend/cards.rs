@@ -40,6 +40,7 @@ pub enum CardRarity {
     Epic,
     Rare,
     Common,
+    Never,
 }
 
 #[derive(Debug, Default, TypePath)]
@@ -123,6 +124,7 @@ pub struct SortedCardHandles {
     pub epic_cards: Vec<Handle<Card>>,
     pub rare_cards: Vec<Handle<Card>>,
     pub common_cards: Vec<Handle<Card>>,
+    pub never_shop_cards: Vec<Handle<Card>>,
 }
 
 #[derive(Resource, Debug, Default)]
@@ -165,6 +167,7 @@ fn validate_and_sort_newly_loaded_cards(
                         CardRarity::Epic => sorted_cards.epic_cards.push(handle),
                         CardRarity::Rare => sorted_cards.rare_cards.push(handle),
                         CardRarity::Common => sorted_cards.common_cards.push(handle),
+                        CardRarity::Never => sorted_cards.never_shop_cards.push(handle),
                     }
                 }
                 // consider making it also remove the matching handle from the folder asset in order to save memory.
@@ -193,12 +196,13 @@ impl PlayerCardInventory {
 fn initialize_player_inventories(
     players: Query<Entity, With<PlayerMarker>>,
     mut commands: Commands,
+    asset_server: ResMut<AssetServer>,
 ) {
     for player in players {
         commands.entity(player).insert(PlayerCardInventory {
             // code handles a max of 7 on mac laptop screen
             max_size: 4,
-            cards: Vec::new(),
+            cards: vec![asset_server.load("cards/card_parameters/spawn_tower.card.ron")],
         });
     }
 }

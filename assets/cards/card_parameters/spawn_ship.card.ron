@@ -1,6 +1,6 @@
 ProxyCard (
     name: "Spaceship Genesis",
-    price: 7,
+    price: 5,
     action: ProxyAction (
         functionality: SpawnPiece(
             path_to_proxy_piece: "pieces/piece_parameters/space_ship.piece.ron",
@@ -10,5 +10,5 @@ ProxyCard (
         ),
     image_path: "cards/card_images/SpaceshipSpawn.png",
     rarity: Rare,
-    description: "Spawn one ship onto unnoccupied tile."
+    description: "Spawns the Centenial Hawk onto a tile-- a delicate but nimble attacker."
 )

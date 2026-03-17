@@ -1,5 +1,5 @@
 ProxyOrder (
-    name: "Hustle",
+    name: "Rotate",
     proxy_action: ProxyAction (
         functionality: RotateSelf,
         eligibility_method: RotateSelf,

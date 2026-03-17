@@ -8,7 +8,8 @@ use crate::{
         cards::Card,
         game_parameters::SetUpBoard,
         pieces::{
-            ActiveLogPiece, Health, LogPieceOwnedByPlayer, Order, OrdersPerTurn, PieceOrders,
+            ActiveLogPiece, Health, LogPieceOwnedByPlayer, MonataryValue, Order, OrdersPerTurn,
+            PieceOrders,
         },
     },
     frontend::{
@@ -215,14 +216,21 @@ fn inspect_piece(
     mut commands: Commands,
     inspector: Single<Entity, With<InspectorPanel>>,
     vis_pieces: Query<(&VisPieceOf, &PieceName)>,
-    log_pieces: Query<(&Health, &LogPieceOwnedByPlayer, &OrdersPerTurn)>,
+    log_pieces: Query<(
+        &Health,
+        &LogPieceOwnedByPlayer,
+        &OrdersPerTurn,
+        &MonataryValue,
+    )>,
     player_vis_data: Query<(&DisplayName, &DataForPlayer)>,
 ) {
     let Ok((log_piece_ent, name)) = vis_pieces.get(over.entity) else {
         return;
     };
 
-    let Ok((health_data, commanding_player, order_stats)) = log_pieces.get(log_piece_ent.0) else {
+    let Ok((health_data, commanding_player, order_stats, monatary_value)) =
+        log_pieces.get(log_piece_ent.0)
+    else {
         error!("The visual piece did not point to a logical piece");
         return;
     };
@@ -279,6 +287,27 @@ fn inspect_piece(
         ));
         break;
     }
+
+    commands.spawn((
+        ChildOf(inspector),
+        Node {
+            width: Val::Percent(90.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        children![(
+            Text::new(format!("Monetary Value: {}", monatary_value.0)),
+            TextFont {
+                font_size: 24.0,
+                ..default()
+            },
+            TextLayout {
+                justify: Justify::Center,
+                linebreak: LineBreak::WordBoundary
+            }
+        )],
+    ));
 
     commands.spawn((
         ChildOf(inspector),

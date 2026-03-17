@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     backend::{
         game_parameters::SetUpBoard,
-        players::{CreatedLogPlayer, PlayersToCreate},
+        players::{CreatedLogPlayer, GhostPlayer, PlayersToCreate},
     },
     frontend::FrontEndSystems,
 };
@@ -12,7 +12,10 @@ pub struct VisPlayerDataPlugin;
 
 impl Plugin for VisPlayerDataPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(SetUpBoard, create_front_end_players.in_set(FrontEndSystems));
+        app.add_systems(
+            SetUpBoard,
+            (create_front_end_players, create_frontend_ghost_player).in_set(FrontEndSystems),
+        );
     }
 }
 #[derive(Debug, Component)]
@@ -44,4 +47,19 @@ fn create_front_end_players(
             DisplayName(instructions.name.clone()),
         ));
     }
+}
+
+fn create_frontend_ghost_player(
+    log_ghost: Single<Entity, With<GhostPlayer>>,
+    mut commands: Commands,
+    asset_server: ResMut<AssetServer>,
+) {
+    commands.spawn((
+        DataForPlayer(log_ghost.entity()),
+        PieceBasePlateModel(
+            asset_server
+                .load(GltfAssetLabel::Scene(0).from_asset("base_plates/GhostBasePlate.glb")),
+        ),
+        DisplayName("??????".into()),
+    ));
 }

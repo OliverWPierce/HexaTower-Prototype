@@ -6,8 +6,10 @@ use crate::backend::{
     game_actions::dangerous_selection_mechanics::{SelectedLogTiles, TileSelectionStatus},
     game_parameters::SetUpBoard,
     pieces::{
-        ActiveLogPiece, DamagePiece, DamageType, FacingDirection, LogPieceOwnedByPlayer, MovePiece,
-        OccupiedByPiece, OccupiesTile, OrdersPerTurn, Piece, RotatePiece, SpawnLogPiece,
+        ActiveLogPiece, CommandPoint, DamagePiece, DamageType, FacingDirection,
+        LogPieceOwnedByPlayer, MonataryValue, MovePiece, OccupiedByPiece, OccupiesTile,
+        OrdersPerTurn, OwnsLogPieces, Piece, PieceForSale, RotatePiece, SpawnLogPiece,
+        TransferPieceOwnership,
     },
     players::{ActivePlayer, PlayerOrdersRemaining, StartTurn},
     shop::ChangePlayerCoinsBy,
@@ -155,10 +157,11 @@ pub enum ActionFunctionality {
     MoveSelfToTile,
     /// This function assumes that only adjacent tiles can be selected.
     RotateSelf,
+    PurchasePiece,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-enum EligibilityDeterminationMethod {
+pub enum EligibilityDeterminationMethod {
     AllTiles,
     AllPieces,
     UnoccupiedTiles,
@@ -169,17 +172,19 @@ enum EligibilityDeterminationMethod {
         depth: u32,
         occupied_or_not: OccupationStatus,
     },
+    GeneralSpawning,
+    PiecesForSale,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize, Reflect, Copy)]
-enum OccupationStatus {
+pub enum OccupationStatus {
     Vacant,
     Occupied,
     Either,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize, Reflect, Copy)]
-enum FanWidth {
+pub enum FanWidth {
     One,
     Three,
     Five,
@@ -188,15 +193,16 @@ enum FanWidth {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct GameAction {
-    functionality: ActionFunctionality,
-    eligibility_method: EligibilityDeterminationMethod,
-    selection_count_bounds: GameDesignBounds,
+    pub functionality: ActionFunctionality,
+    pub eligibility_method: EligibilityDeterminationMethod,
+    pub selection_count_bounds: GameDesignBounds,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ActionSource {
     Card { inventory_index: usize },
     Order { index_in_piece_orders: usize },
+    OrphanPiecePurchasing,
 }
 
 #[derive(Debug, Resource, Default)]
@@ -234,7 +240,7 @@ impl SelectionBounds for GameAction {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect, Serialize, Deserialize)]
-pub struct GameDesignBounds(Bounds);
+pub struct GameDesignBounds(pub Bounds);
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Reflect, Serialize, Deserialize)]
 pub struct Bounds {
@@ -277,6 +283,10 @@ impl SelectionBounds for ActionFunctionality {
                 min_tiles: 1,
                 max_tiles: 1,
             },
+            ActionFunctionality::PurchasePiece => Bounds {
+                min_tiles: 1,
+                max_tiles: 1,
+            },
         }
     }
 }
@@ -308,6 +318,14 @@ impl SelectionBounds for EligibilityDeterminationMethod {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
+            EligibilityDeterminationMethod::GeneralSpawning => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
+            EligibilityDeterminationMethod::PiecesForSale => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
         }
     }
 }
@@ -325,6 +343,8 @@ impl RequiresActivePiece for EligibilityDeterminationMethod {
             EligibilityDeterminationMethod::PieceChain => false,
             EligibilityDeterminationMethod::None => false,
             EligibilityDeterminationMethod::Fan { .. } => true,
+            EligibilityDeterminationMethod::GeneralSpawning => false,
+            EligibilityDeterminationMethod::PiecesForSale => false,
         }
     }
 }
@@ -339,6 +359,7 @@ impl RequiresActivePiece for ActionFunctionality {
             ActionFunctionality::AttackPiece(..) => false,
             ActionFunctionality::MoveSelfToTile => true,
             ActionFunctionality::RotateSelf => true,
+            ActionFunctionality::PurchasePiece => false,
         }
     }
 }
@@ -365,9 +386,10 @@ pub fn execute_action_functionality(
     mut commands: Commands,
     map_tile_to_piece: Query<&OccupiedByPiece>,
     active_piece: Res<ActiveLogPiece>,
-) {
+    log_pieces: Query<&MonataryValue>,
+) -> Result<(), BevyError> {
     let Some(GameAction { functionality, .. }) = action.0.clone() else {
-        return;
+        return Ok(());
     };
 
     match functionality {
@@ -424,7 +446,27 @@ pub fn execute_action_functionality(
                 target_tile: *selected_tiles.as_read_only_list().first().unwrap(),
             });
         }
+        ActionFunctionality::PurchasePiece => {
+            let log_tile =
+                map_tile_to_piece.get(*selected_tiles.as_read_only_list().first().unwrap())?;
+
+            commands.trigger(TransferPieceOwnership {
+                piece: log_tile.log_piece(),
+                to_player: active_plyer.0,
+            });
+
+            commands
+                .entity(log_tile.log_piece())
+                .remove::<PieceForSale>();
+
+            commands.trigger(ChangePlayerCoinsBy(
+                -(log_pieces.get(log_tile.log_piece())?.0 as i32),
+                active_plyer.0,
+            ));
+        }
     }
+
+    Ok(())
 }
 
 fn clear_action_related_data(mut commands: Commands) {
@@ -439,23 +481,30 @@ fn evaluate_tiles(
         &AdjacentTiles,
     )>,
     selected_tiles: Res<SelectedLogTiles>,
-    log_pieces: Query<(&OccupiesTile, &FacingDirection)>,
+    log_pieces: Query<(
+        &OccupiesTile,
+        &FacingDirection,
+        Has<CommandPoint>,
+        Has<PieceForSale>,
+    )>,
     active_piece: Res<ActiveLogPiece>,
-) {
+    active_player: Res<ActivePlayer>,
+    players: Query<&OwnsLogPieces>,
+) -> Result<(), BevyError> {
     let Some(GameAction {
         eligibility_method,
         selection_count_bounds,
         ..
     }) = action.0.clone()
     else {
-        return;
+        return Ok(());
     };
 
     if selected_tiles.as_read_only_list().len() >= selection_count_bounds.0.max_tiles {
         for (mut selection_state, _, _) in tiles.iter_mut() {
             selection_state.try_make_ineligble();
         }
-        return;
+        return Ok(());
     }
 
     match eligibility_method {
@@ -526,10 +575,7 @@ fn evaluate_tiles(
             depth,
             occupied_or_not,
         } => {
-            let Ok((basis_tile, basis_direction)) = log_pieces.get(active_piece.0.unwrap()) else {
-                debug!("could not find basis tile for fan selection.");
-                return;
-            };
+            let (basis_tile, basis_direction, ..) = log_pieces.get(active_piece.0.unwrap())?;
 
             let mut directional_indices_of_fan = Vec::new();
 
@@ -571,21 +617,20 @@ fn evaluate_tiles(
                             panic!()
                         };
 
+                        eligible_tiles.push(adjacent_tile);
+
                         match occupied_or_not {
                             OccupationStatus::Vacant => {
                                 if !is_occupied {
-                                    eligible_tiles.push(adjacent_tile);
                                     selection_state.try_make_eligible();
                                 }
                             }
                             OccupationStatus::Occupied => {
                                 if is_occupied {
-                                    eligible_tiles.push(adjacent_tile);
                                     selection_state.try_make_eligible();
                                 }
                             }
                             OccupationStatus::Either => {
-                                eligible_tiles.push(adjacent_tile);
                                 selection_state.try_make_eligible();
                             }
                         }
@@ -593,7 +638,28 @@ fn evaluate_tiles(
                 }
             }
         }
+        EligibilityDeterminationMethod::GeneralSpawning => {
+            // let Ok(owned_pieces) = players.get(active_player.0) else {
+            //     return;
+            // };
+            // let player_command_points = owned_pieces.list().iter().filter_map(|piece| {
+            //     let (OccupiesTile { log_tile }, _, is_spawn_point) = log_pieces.get(*piece).ok()?;
+
+            // });
+            todo!()
+        }
+        EligibilityDeterminationMethod::PiecesForSale => {
+            for (OccupiesTile { log_tile }, _, _, for_sale) in log_pieces.iter() {
+                if for_sale {
+                    tiles.get_mut(*log_tile)?.0.try_make_eligible();
+                } else {
+                    tiles.get_mut(*log_tile)?.0.try_make_ineligble();
+                }
+            }
+        }
     }
+
+    Ok(())
 }
 
 #[derive(Debug, ScheduleLabel, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -675,6 +741,7 @@ pub mod dangerous_selection_mechanics {
                 match source {
                     super::ActionSource::Card { .. } => commands.trigger(SetPieceToActive(None)),
                     super::ActionSource::Order { .. } => (),
+                    super::ActionSource::OrphanPiecePurchasing => (),
                 }
             }
         }

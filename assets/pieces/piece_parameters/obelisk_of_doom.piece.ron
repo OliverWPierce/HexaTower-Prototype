@@ -2,7 +2,7 @@ ProxyPiece (
     name: "imposing obelisk",
     model_path: "pieces/piece_models/Obelisk.glb",
     health: 175,
-    default_coin_value: 12,
+    default_coin_value: 15,
     is_win_condition: true,
     should_give_player_extra_command: true,
     order1_path: None,

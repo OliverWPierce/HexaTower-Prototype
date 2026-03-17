@@ -4,14 +4,20 @@ use crate::backend::{
     BackEndSystems,
     game_actions::ClearBackendData,
     game_parameters::SetUpBoard,
-    pieces::{CommandPoint, LogPieceOwnedByPlayer, OrdersPerTurn, OwnsLogPieces, WinCondition},
+    pieces::{
+        CommandPoint, LogPieceOwnedByPlayer, OrdersPerTurn, OwnsLogPieces, PieceForSale,
+        TransferPieceOwnership, WinCondition,
+    },
 };
 
 pub struct PlayersPlugin;
 
 impl Plugin for PlayersPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(SetUpBoard, create_basic_players.in_set(BackEndSystems));
+        app.add_systems(
+            SetUpBoard,
+            (create_basic_players, create_ghost_player).in_set(BackEndSystems),
+        );
 
         app.add_observer(switch_player);
         app.add_observer(check_if_player_dead_or_game_over);
@@ -23,6 +29,7 @@ impl Plugin for PlayersPlugin {
         );
 
         app.add_systems(StartTurn, calculate_player_orders_this_turn);
+        app.add_observer(sell_pieces);
 
         //TMP systems!!!
         app.add_systems(Update, tmp_update_and_check_start_delay);
@@ -57,7 +64,11 @@ pub fn create_basic_players(
 
     for (index, _) in qued_players.0.iter().enumerate() {
         let new_player = commands
-            .spawn((PlayerMarker, PlayerState::Alive, PlayerOrdersRemaining(0)))
+            .spawn((
+                PlayerMarker,
+                PlayerState::HasNoTowerYet,
+                PlayerOrdersRemaining(0),
+            ))
             .id();
         created_players.write(CreatedLogPlayer(new_player, index));
 
@@ -81,6 +92,13 @@ pub fn create_basic_players(
     }
 }
 
+#[derive(Debug, Component)]
+pub struct GhostPlayer;
+
+fn create_ghost_player(mut commands: Commands) {
+    commands.spawn((PlayerMarker, PlayerState::Dead, GhostPlayer));
+}
+
 fn remove_resource_with_player_creation_instructions(mut commands: Commands) {
     commands.remove_resource::<PlayersToCreate>();
 }
@@ -102,18 +120,50 @@ pub struct SwitchPlayerRequest;
 fn switch_player(
     _request: On<SwitchPlayerRequest>,
     mut commands: Commands,
-    players: Query<&PlayerTurnOrder>,
+    players: Query<(&PlayerTurnOrder, &PlayerState)>,
     mut active: ResMut<ActivePlayer>,
-) {
-    let Ok(next) = players.get(active.0) else {
-        error!("The entity listed as the current player was not a player.");
-        return;
+) -> Result<(), BevyError> {
+    let (
+        PlayerTurnOrder {
+            next_player: ideal_next_player,
+        },
+        current_player_life_state,
+    ) = players.get(active.0)?;
+
+    if *current_player_life_state == PlayerState::HasNoTowerYet {
+        return Ok(());
+    }
+
+    let next_player = {
+        let mut current_candidate = *ideal_next_player;
+
+        loop {
+            let (
+                PlayerTurnOrder {
+                    next_player: next_candidate,
+                },
+                life_state,
+            ) = players.get(current_candidate)?;
+
+            if *life_state != PlayerState::Dead {
+                break current_candidate;
+            } else {
+                current_candidate = *next_candidate;
+            }
+        }
     };
 
+    if next_player == active.0 {
+        commands.trigger(CheckForWinner);
+    }
+
+    active.0 = next_player;
+
     commands.run_system_cached(replenish_piece_orders);
-    active.0 = next.next_player;
 
     commands.run_schedule(StartTurn);
+
+    Ok(())
 }
 
 fn replenish_piece_orders(
@@ -174,8 +224,9 @@ fn tmp_update_and_check_start_delay(
         commands.run_schedule(StartTurn);
     }
 }
-#[derive(Debug, Component)]
-enum PlayerState {
+#[derive(Debug, Component, PartialEq, Eq)]
+pub enum PlayerState {
+    HasNoTowerYet,
     Alive,
     Dead,
 }
@@ -184,40 +235,62 @@ pub struct CheckForWinner;
 
 fn check_if_player_dead_or_game_over(
     _trigger: On<CheckForWinner>,
-    players: Query<(&mut PlayerState, &OwnsLogPieces)>,
+    active_player: Res<ActivePlayer>,
+    players: Query<(Entity, &mut PlayerState, &OwnsLogPieces)>,
     living_win_conditions: Query<&LogPieceOwnedByPlayer, With<WinCondition>>,
     mut commands: Commands,
 ) {
     let mut living_players: u8 = 0;
 
-    for (mut player_state, owned_pieces) in players {
-        let mut should_be_dead = true;
-
-        for piece in owned_pieces.list() {
-            let Ok(..) = living_win_conditions.get(*piece) else {
-                continue;
-            };
-            should_be_dead = false;
-            break;
-        }
-
-        if should_be_dead {
-            *player_state = PlayerState::Dead;
-        } else {
+    for (player_ent, mut player_state, owned_pieces) in players {
+        if *player_state == PlayerState::HasNoTowerYet
+            || owned_pieces
+                .list()
+                .iter()
+                .any(|piece| living_win_conditions.get(*piece).is_ok())
+        {
             living_players += 1;
+        } else if *player_state != PlayerState::Dead {
+            *player_state = PlayerState::Dead;
+            commands.trigger(PlayerDied(player_ent));
+
+            if active_player.0 == player_ent {
+                commands.trigger(SwitchPlayerRequest);
+            }
         }
     }
 
-    if living_players == 1 {
-        commands.trigger(GameOver {
-            winner: Some(living_win_conditions.iter().next().unwrap().0),
-        });
-    } else if living_players == 0 {
-        commands.trigger(GameOver { winner: None });
+    if living_players > 1 {
+        return;
     }
+
+    commands.trigger(GameOver {
+        winner: (living_players == 1).then(|| living_win_conditions.iter().next().unwrap().0),
+    });
 }
 
 #[derive(Debug, Event)]
 pub struct GameOver {
     pub winner: Option<Entity>,
+}
+#[derive(Debug, Event)]
+struct PlayerDied(Entity);
+
+fn sell_pieces(
+    dead_player: On<PlayerDied>,
+    owned_pieces: Query<&OwnsLogPieces>,
+    ghost_player: Single<Entity, With<GhostPlayer>>,
+    mut commands: Commands,
+) -> Result<(), BevyError> {
+    let ghost_ent = ghost_player.entity();
+
+    for piece in owned_pieces.get(dead_player.0)?.list() {
+        commands.entity(*piece).insert(PieceForSale);
+        commands.trigger(TransferPieceOwnership {
+            piece: *piece,
+            to_player: ghost_ent,
+        });
+    }
+
+    Ok(())
 }

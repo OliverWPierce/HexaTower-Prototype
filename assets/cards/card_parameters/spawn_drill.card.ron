@@ -1,0 +1,14 @@
+ProxyCard (
+    name: "Drill Genesis",
+    price: 7,
+    action: ProxyAction (
+        functionality: SpawnPiece(
+            path_to_proxy_piece: "pieces/piece_parameters/mining_drill.piece.ron",
+        ),
+        eligibility_method: UnoccupiedTiles,
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
+        ),
+    image_path: "cards/card_images/MiningDrillSpawn.png",
+    rarity: Common,
+    description: "Spawn a drill onto a tile. Drills are immobile and have low health, but produce gold on demand."
+)
