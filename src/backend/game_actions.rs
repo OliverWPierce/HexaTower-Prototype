@@ -12,7 +12,7 @@ use crate::backend::{
         TransferPieceOwnership,
     },
     players::{ActivePlayer, PlayerOrdersRemaining, StartTurn},
-    shop::ChangePlayerCoinsBy,
+    shop::{ChangePlayerCoinsBy, CoinBag},
     tiles::{
         AdjacentTiles, DeleteLogTileRequest, EssentialTileCreationSystems, LogicalTileCreated,
     },
@@ -786,8 +786,9 @@ fn validate_execution_request(
     selected_tiles: Res<SelectedLogTiles>,
     active_plyer: Res<ActivePlayer>,
     active_piece: Res<ActiveLogPiece>,
-    player_orders_remaining: Query<&PlayerOrdersRemaining>,
-    piece_info: Query<(&OrdersPerTurn, &LogPieceOwnedByPlayer)>,
+    player_info: Query<(&PlayerOrdersRemaining, &CoinBag)>,
+    piece_info: Query<(&OrdersPerTurn, &LogPieceOwnedByPlayer, &MonataryValue)>,
+    map_tile_to_piece: Query<&OccupiedByPiece>,
 ) -> Result<(), BevyError> {
     let Some(action_info) = &action.0 else {
         return Ok(());
@@ -799,7 +800,7 @@ fn validate_execution_request(
 
     let amount_selected = selected_tiles.as_read_only_list().len();
 
-    let order_count_ok = match source {
+    let otherwise_allowed = match source {
         ActionSource::Order { .. } => {
             let Some(piece) = active_piece.0 else {
                 warn!("tried to execute an order but there was no active piece.");
@@ -813,18 +814,35 @@ fn validate_execution_request(
                     ..
                 },
                 LogPieceOwnedByPlayer(owner),
+                _,
             ) = piece_info.get(piece)?;
 
-            player_orders_remaining.get(active_plyer.0)?.0 > 0
+            player_info.get(active_plyer.0)?.0.0 > 0
                 && *piece_orders_remaining > 0
                 && *owner == active_plyer.0
+        }
+        ActionSource::OrphanPiecePurchasing => {
+            player_info.get(active_plyer.0)?.1.coins
+                >= selected_tiles
+                    .as_read_only_list()
+                    .iter()
+                    .filter_map(|tile| {
+                        Some(
+                            piece_info
+                                .get(map_tile_to_piece.get(*tile).ok()?.log_piece())
+                                .ok()?
+                                .2
+                                .0,
+                        )
+                    })
+                    .sum::<u32>() as i32
         }
         _ => true,
     };
 
     if amount_selected >= action_info.functionality.bounds().min_tiles
         && amount_selected <= action_info.functionality.bounds().max_tiles
-        && order_count_ok
+        && otherwise_allowed
     {
         commands.run_schedule(ExecuteSelectedAction);
     }
