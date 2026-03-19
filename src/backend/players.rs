@@ -8,6 +8,7 @@ use crate::backend::{
         CommandPoint, LogPieceOwnedByPlayer, OrdersPerTurn, OwnsLogPieces, PieceForSale,
         TransferPieceOwnership, WinCondition,
     },
+    shop::CoinBag,
 };
 
 pub struct PlayersPlugin;
@@ -28,7 +29,10 @@ impl Plugin for PlayersPlugin {
             remove_resource_with_player_creation_instructions.in_set(ClearBackendData),
         );
 
-        app.add_systems(StartTurn, calculate_player_orders_this_turn);
+        app.add_systems(
+            StartTurn,
+            (calculate_player_orders_this_turn, passive_income),
+        );
         app.add_observer(sell_pieces);
 
         //TMP systems!!!
@@ -292,5 +296,13 @@ fn sell_pieces(
         });
     }
 
+    Ok(())
+}
+
+fn passive_income(
+    active_player: Res<ActivePlayer>,
+    mut coins: Query<&mut CoinBag>,
+) -> Result<(), BevyError> {
+    coins.get_mut(active_player.0)?.give_passive_income();
     Ok(())
 }

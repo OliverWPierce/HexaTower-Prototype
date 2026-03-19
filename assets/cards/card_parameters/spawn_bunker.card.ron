@@ -1,6 +1,6 @@
 ProxyCard (
     name: "Emergency Bunker Genesis",
-    price: 12,
+    price: 16,
     action: ProxyAction (
         functionality: SpawnPiece(
             path_to_proxy_piece: "pieces/piece_parameters/bunker.piece.ron",
@@ -8,7 +8,7 @@ ProxyCard (
         eligibility_method: TowerSpawn,
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
         ),
-    image_path: "cards/card_images/TowerSpawn.png",
+    image_path: "cards/card_images/BunkerSpawn.png",
     rarity: Legendary,
     description: "Spawn an emergency bunker on any unnoccupied tile, provided it is not immediately adjacent to an enemy's bunker or tower. The bunker has 55 health and zero functionality other than keeping you alive if your tower is destroyed. It does not give an extra order, nor is it a spawnpoint."
 )

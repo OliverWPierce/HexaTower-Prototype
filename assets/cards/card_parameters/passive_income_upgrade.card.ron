@@ -1,0 +1,12 @@
+ProxyCard (
+    name: "Passive Income",
+    price: 3,
+    action: ProxyAction (
+        functionality: ChangeActivePlayerPassiveIncomeBy(1),
+        eligibility_method: None,
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 0, max_tiles: 0)),
+        ),
+    image_path: "cards/card_images/BankWithUpArrow.png",
+    rarity: Rare,
+    description: "Increase your passive income by $1. Passive income is given at the start of every turn."
+)

@@ -8,7 +8,7 @@ ProxyCard (
         eligibility_method: GeneralSpawning ( depth: 1 ),
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
         ),
-    image_path: "cards/card_images/TowerSpawn.png",
+    image_path: "cards/card_images/WallSpawn.png",
     rarity: Common,
     description: "Spawn a wall with 75 health. It doesn't do much, but hey, its a solid defense."
 )

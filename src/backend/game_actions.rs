@@ -12,7 +12,7 @@ use crate::backend::{
         WinCondition,
     },
     players::{ActivePlayer, PlayerOrdersRemaining, StartTurn},
-    shop::{ChangePlayerCoinsBy, CoinBag},
+    shop::{ChangePlayerCoinsBy, ChangePlayerPassiveCoinsBy, CoinBag},
     tiles::{
         AdjacentTiles, DeleteLogTileRequest, EssentialTileCreationSystems, LogicalTileCreated,
     },
@@ -74,6 +74,7 @@ enum ProxyActionFunctionality {
     AttackPiece(DamageType),
     MoveSelf,
     RotateSelf,
+    ChangeActivePlayerPassiveIncomeBy(i32),
 }
 
 #[derive(Debug, Deserialize, Serialize, Reflect, Clone, Copy)]
@@ -113,6 +114,9 @@ impl GameAction {
             }
             ProxyActionFunctionality::MoveSelf => ActionFunctionality::MoveSelfToTile,
             ProxyActionFunctionality::RotateSelf => ActionFunctionality::RotateSelf,
+            ProxyActionFunctionality::ChangeActivePlayerPassiveIncomeBy(coins) => {
+                ActionFunctionality::IncreaseActivePlayerPassiveIncomeBy(coins)
+            }
         };
 
         let converted_action_method = match proxy.eligibility_method {
@@ -166,6 +170,7 @@ pub enum ActionFunctionality {
     /// This function assumes that only adjacent tiles can be selected.
     RotateSelf,
     PurchasePiece,
+    IncreaseActivePlayerPassiveIncomeBy(i32),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -298,6 +303,10 @@ impl SelectionBounds for ActionFunctionality {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
+            ActionFunctionality::IncreaseActivePlayerPassiveIncomeBy(_) => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
         }
     }
 }
@@ -376,6 +385,7 @@ impl RequiresActivePiece for ActionFunctionality {
             ActionFunctionality::MoveSelfToTile => true,
             ActionFunctionality::RotateSelf => true,
             ActionFunctionality::PurchasePiece => false,
+            ActionFunctionality::IncreaseActivePlayerPassiveIncomeBy(_) => false,
         }
     }
 }
@@ -395,7 +405,7 @@ fn insert_selection_data(mut new_tiles: MessageReader<LogicalTileCreated>, mut c
 pub fn execute_action_functionality(
     action: Res<CurrentAction>,
     selected_tiles: Res<SelectedLogTiles>,
-    active_plyer: Res<ActivePlayer>,
+    active_player: Res<ActivePlayer>,
     mut deletions: MessageWriter<DeleteLogTileRequest>,
     mut piece_spawns: MessageWriter<SpawnLogPiece>,
     mut damage_writer: MessageWriter<DamagePiece>,
@@ -417,7 +427,7 @@ pub fn execute_action_functionality(
         ActionFunctionality::SpawnPiece(piece) => {
             for log_tile in selected_tiles.as_read_only_list() {
                 piece_spawns.write(SpawnLogPiece {
-                    player: active_plyer.0,
+                    player: active_player.0,
                     piece: piece.clone(),
                     log_tile: *log_tile,
                 });
@@ -428,13 +438,13 @@ pub fn execute_action_functionality(
                 *(selected_tiles.as_read_only_list().get(1).unwrap()),
             ));
             piece_spawns.write(SpawnLogPiece {
-                player: active_plyer.0,
+                player: active_player.0,
                 piece: piece.clone(),
                 log_tile: *selected_tiles.as_read_only_list().first().unwrap(),
             });
         }
         ActionFunctionality::AlterActivePlayerCoinCount(delta_coins) => {
-            commands.trigger(ChangePlayerCoinsBy(delta_coins, active_plyer.0));
+            commands.trigger(ChangePlayerCoinsBy(delta_coins, active_player.0));
         }
         ActionFunctionality::AttackPiece(damage_type) => {
             for log_tile in selected_tiles.as_read_only_list() {
@@ -446,7 +456,7 @@ pub fn execute_action_functionality(
                 damage_writer.write(DamagePiece {
                     log_piece: log_piece.log_piece(),
                     method: damage_type,
-                    source_player: Some(active_plyer.0),
+                    source_player: Some(active_player.0),
                 });
             }
         }
@@ -470,7 +480,7 @@ pub fn execute_action_functionality(
             {
                 commands.trigger(TransferPieceOwnership {
                     piece: log_tile.log_piece(),
-                    to_player: active_plyer.0,
+                    to_player: active_player.0,
                 });
 
                 commands
@@ -479,9 +489,12 @@ pub fn execute_action_functionality(
 
                 commands.trigger(ChangePlayerCoinsBy(
                     -(log_pieces.get(log_tile.log_piece())?.0 as i32),
-                    active_plyer.0,
+                    active_player.0,
                 ));
             }
+        }
+        ActionFunctionality::IncreaseActivePlayerPassiveIncomeBy(coins) => {
+            commands.trigger(ChangePlayerPassiveCoinsBy(coins, active_player.0));
         }
     }
 

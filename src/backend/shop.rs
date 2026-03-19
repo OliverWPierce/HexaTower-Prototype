@@ -20,6 +20,7 @@ impl Plugin for ShopPlugin {
         );
 
         app.add_observer(change_coins);
+        app.add_observer(change_passive_coins);
         app.add_observer(manage_purchase_requests);
 
         app.add_systems(StartTurn, refresh_shop_on_new_turn.in_set(BackEndSystems));
@@ -152,7 +153,15 @@ impl ShopOfferSet {
 #[derive(Debug, Component)]
 pub struct CoinBag {
     pub coins: i32,
+    pub passive_income: i32,
 }
+
+impl CoinBag {
+    pub fn give_passive_income(&mut self) {
+        self.coins += self.passive_income;
+    }
+}
+
 #[derive(Debug, Event)]
 pub struct ChangePlayerCoinsBy(pub i32, pub Entity);
 
@@ -165,10 +174,25 @@ fn change_coins(change: On<ChangePlayerCoinsBy>, mut coins: Query<&mut CoinBag>)
     player_coins.coins += change.0;
 }
 
+#[derive(Debug, Event)]
+pub struct ChangePlayerPassiveCoinsBy(pub i32, pub Entity);
+
+fn change_passive_coins(change: On<ChangePlayerPassiveCoinsBy>, mut coins: Query<&mut CoinBag>) {
+    let Ok(mut player_coins) = coins.get_mut(change.1) else {
+        warn!("The player had no coinbag.");
+        return;
+    };
+
+    player_coins.passive_income += change.0;
+}
+
 fn initialize_player_shop_data(players: Query<Entity, With<PlayerMarker>>, mut commands: Commands) {
     for player in players {
         commands.entity(player).insert((
-            CoinBag { coins: 20 },
+            CoinBag {
+                coins: 19,
+                passive_income: 1,
+            },
             PlayerShopSetsInfo {
                 shop_sets: [
                     Some(ShopOfferSet::default().with_restock_data(0, 1)),

@@ -202,7 +202,10 @@ fn initialize_player_inventories(
         commands.entity(player).insert(PlayerCardInventory {
             // code handles a max of 7 on mac laptop screen
             max_size: 4,
-            cards: vec![asset_server.load("cards/card_parameters/spawn_tower.card.ron")],
+            cards: vec![
+                asset_server.load("cards/card_parameters/spawn_tower.card.ron"),
+                asset_server.load("cards/card_parameters/spawn_drill.card.ron"),
+            ],
         });
     }
 }
