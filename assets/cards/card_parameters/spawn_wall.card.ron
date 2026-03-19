@@ -1,0 +1,14 @@
+ProxyCard (
+    name: "Wall Genesis",
+    price: 5,
+    action: ProxyAction (
+        functionality: SpawnPiece(
+            path_to_proxy_piece: "pieces/piece_parameters/wall.piece.ron",
+        ),
+        eligibility_method: GeneralSpawning ( depth: 1 ),
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
+        ),
+    image_path: "cards/card_images/TowerSpawn.png",
+    rarity: Common,
+    description: "Spawn a wall with 75 health. It doesn't do much, but hey, its a solid defense."
+)

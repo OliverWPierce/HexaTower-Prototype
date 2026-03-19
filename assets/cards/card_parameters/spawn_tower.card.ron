@@ -5,7 +5,7 @@ ProxyCard (
         functionality: SpawnPiece(
             path_to_proxy_piece: "pieces/piece_parameters/obelisk_of_doom.piece.ron",
         ),
-        eligibility_method: UnoccupiedTiles,
+        eligibility_method: TowerSpawn,
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
         ),
     image_path: "cards/card_images/TowerSpawn.png",

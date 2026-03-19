@@ -8,5 +8,5 @@ ProxyCard (
         ),
     image_path: "cards/card_images/BlueCash.png",
     rarity: Legendary,
-    description: "Instantly recieve $20. Looks like your ship just came in."
+    description: "Instantly recieve $7. Looks like your ship just came in."
 )

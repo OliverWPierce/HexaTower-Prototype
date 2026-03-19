@@ -4,6 +4,7 @@ ProxyPiece (
     health: 25,
     default_coin_value: 2,
     is_win_condition: false,
+    is_spawn_point: false,
     should_give_player_extra_command: false,
     order1_path: Some("orders/mine_gold.order.ron"),
     order2_path: None,

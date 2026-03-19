@@ -58,6 +58,7 @@ struct ProxyPiece {
     health: u32,
     default_coin_value: u32,
     is_win_condition: bool,
+    is_spawn_point: bool,
     should_give_player_extra_command: bool,
 
     // It would be simpler to store these as a vector, but having separate feilds is clearer to modders and prevents inncorrect situations, since the code is only designed to handle five orders per peice.
@@ -139,6 +140,7 @@ pub struct Piece {
     pub health: u32,
     pub default_coin_value: u32,
     pub default_orders: [Option<Handle<Order>>; 5],
+    pub is_spawn_point: bool,
     pub is_win_condtion: bool,
     pub should_give_player_extra_command: bool,
 }
@@ -178,6 +180,7 @@ impl AssetLoader for PieceAssetLoader {
             health: proxy.health,
             is_win_condtion: proxy.is_win_condition,
             default_coin_value: proxy.default_coin_value,
+            is_spawn_point: proxy.is_spawn_point,
             should_give_player_extra_command: proxy.should_give_player_extra_command,
             default_orders: [
                 proxy.order1_path.map(|path| load_context.load(path)),
@@ -232,6 +235,13 @@ impl OccupiedByPiece {
 pub struct OwnsLogPieces(Vec<Entity>);
 
 impl OwnsLogPieces {
+    ///NEVER use this to generate this struct when it is acting as a component.
+    pub fn non_component_default() -> Self {
+        Self(Default::default())
+    }
+}
+
+impl OwnsLogPieces {
     pub fn list(&self) -> &Vec<Entity> {
         &self.0
     }
@@ -273,6 +283,9 @@ pub struct OrdersPerTurn {
 }
 #[derive(Debug, Component)]
 pub struct CommandPoint;
+
+#[derive(Debug, Component)]
+pub struct SpawnPoint;
 
 fn spawn_logpiece(
     mut spawn_requests: MessageReader<SpawnLogPiece>,
@@ -325,6 +338,10 @@ fn spawn_logpiece(
 
             if piece_instructions.should_give_player_extra_command {
                 commands.entity(logpiece_ent).insert(CommandPoint);
+            }
+
+            if piece_instructions.is_spawn_point {
+                commands.entity(logpiece_ent).insert(SpawnPoint);
             }
 
             notify_of_spawns.write(SpawnedLogPieceInfo {

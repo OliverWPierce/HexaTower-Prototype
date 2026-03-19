@@ -5,7 +5,7 @@ ProxyCard (
         functionality: SpawnPiece(
             path_to_proxy_piece: "pieces/piece_parameters/rover.piece.ron",
         ),
-        eligibility_method: UnoccupiedTiles,
+        eligibility_method: GeneralSpawning ( depth: 1 ),
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
         ),
     image_path: "cards/card_images/RoverSpawn.png",

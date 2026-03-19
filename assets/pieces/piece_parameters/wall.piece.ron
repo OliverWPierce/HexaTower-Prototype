@@ -1,7 +1,7 @@
 ProxyPiece (
-    name: "Gandaldore",
-    model_path: "pieces/piece_models/Wizard Hat.glb",
-    health: 4,
+    name: "The Wall",
+    model_path: "pieces/piece_models/Wall.glb",
+    health: 75,
     default_coin_value: 1,
     is_win_condition: false,
     is_spawn_point: false,

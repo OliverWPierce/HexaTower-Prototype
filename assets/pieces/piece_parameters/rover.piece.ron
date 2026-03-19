@@ -4,6 +4,7 @@ ProxyPiece (
     health: 50,
     default_coin_value: 4,
     is_win_condition: false,
+    is_spawn_point: false,
     should_give_player_extra_command: false,
     order1_path: Some("orders/move3.order.ron"),
     order2_path: Some("orders/rotate_self.order.ron"),

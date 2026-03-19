@@ -6,10 +6,10 @@ use crate::backend::{
     game_actions::dangerous_selection_mechanics::{SelectedLogTiles, TileSelectionStatus},
     game_parameters::SetUpBoard,
     pieces::{
-        ActiveLogPiece, CommandPoint, DamagePiece, DamageType, FacingDirection,
-        LogPieceOwnedByPlayer, MonataryValue, MovePiece, OccupiedByPiece, OccupiesTile,
-        OrdersPerTurn, OwnsLogPieces, Piece, PieceForSale, RotatePiece, SpawnLogPiece,
-        TransferPieceOwnership,
+        ActiveLogPiece, DamagePiece, DamageType, FacingDirection, LogPieceOwnedByPlayer,
+        MonataryValue, MovePiece, OccupiedByPiece, OccupiesTile, OrdersPerTurn, OwnsLogPieces,
+        Piece, PieceForSale, RotatePiece, SpawnLogPiece, SpawnPoint, TransferPieceOwnership,
+        WinCondition,
     },
     players::{ActivePlayer, PlayerOrdersRemaining, StartTurn},
     shop::{ChangePlayerCoinsBy, CoinBag},
@@ -89,6 +89,10 @@ enum ProxyDeterminationMethod {
         occupied_or_not: OccupationStatus,
     },
     RotateSelf,
+    GeneralSpawning {
+        depth: u32,
+    },
+    TowerSpawn,
 }
 
 impl GameAction {
@@ -133,6 +137,10 @@ impl GameAction {
                 depth: 1,
                 occupied_or_not: OccupationStatus::Either,
             },
+            ProxyDeterminationMethod::GeneralSpawning { depth } => {
+                EligibilityDeterminationMethod::GeneralSpawning { depth }
+            }
+            ProxyDeterminationMethod::TowerSpawn => EligibilityDeterminationMethod::TowerSpawning,
         };
 
         GameAction {
@@ -172,8 +180,11 @@ pub enum EligibilityDeterminationMethod {
         depth: u32,
         occupied_or_not: OccupationStatus,
     },
-    GeneralSpawning,
+    GeneralSpawning {
+        depth: u32,
+    },
     PiecesForSale,
+    TowerSpawning,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize, Reflect, Copy)]
@@ -284,8 +295,8 @@ impl SelectionBounds for ActionFunctionality {
                 max_tiles: 1,
             },
             ActionFunctionality::PurchasePiece => Bounds {
-                min_tiles: 1,
-                max_tiles: 1,
+                min_tiles: 0,
+                max_tiles: usize::MAX,
             },
         }
     }
@@ -318,11 +329,15 @@ impl SelectionBounds for EligibilityDeterminationMethod {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
-            EligibilityDeterminationMethod::GeneralSpawning => Bounds {
+            EligibilityDeterminationMethod::GeneralSpawning { .. } => Bounds {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
             EligibilityDeterminationMethod::PiecesForSale => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
+            EligibilityDeterminationMethod::TowerSpawning => Bounds {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
@@ -343,8 +358,9 @@ impl RequiresActivePiece for EligibilityDeterminationMethod {
             EligibilityDeterminationMethod::PieceChain => false,
             EligibilityDeterminationMethod::None => false,
             EligibilityDeterminationMethod::Fan { .. } => true,
-            EligibilityDeterminationMethod::GeneralSpawning => false,
+            EligibilityDeterminationMethod::GeneralSpawning { .. } => false,
             EligibilityDeterminationMethod::PiecesForSale => false,
+            EligibilityDeterminationMethod::TowerSpawning => false,
         }
     }
 }
@@ -447,22 +463,25 @@ pub fn execute_action_functionality(
             });
         }
         ActionFunctionality::PurchasePiece => {
-            let log_tile =
-                map_tile_to_piece.get(*selected_tiles.as_read_only_list().first().unwrap())?;
+            for log_tile in selected_tiles
+                .as_read_only_list()
+                .iter()
+                .filter_map(|tile| map_tile_to_piece.get(*tile).ok())
+            {
+                commands.trigger(TransferPieceOwnership {
+                    piece: log_tile.log_piece(),
+                    to_player: active_plyer.0,
+                });
 
-            commands.trigger(TransferPieceOwnership {
-                piece: log_tile.log_piece(),
-                to_player: active_plyer.0,
-            });
+                commands
+                    .entity(log_tile.log_piece())
+                    .remove::<PieceForSale>();
 
-            commands
-                .entity(log_tile.log_piece())
-                .remove::<PieceForSale>();
-
-            commands.trigger(ChangePlayerCoinsBy(
-                -(log_pieces.get(log_tile.log_piece())?.0 as i32),
-                active_plyer.0,
-            ));
+                commands.trigger(ChangePlayerCoinsBy(
+                    -(log_pieces.get(log_tile.log_piece())?.0 as i32),
+                    active_plyer.0,
+                ));
+            }
         }
     }
 
@@ -473,19 +492,23 @@ fn clear_action_related_data(mut commands: Commands) {
     commands.trigger(SetActionTo::None);
 }
 
+#[allow(clippy::type_complexity)]
 fn evaluate_tiles(
     action: Res<CurrentAction>,
     mut tiles: Query<(
         &mut TileSelectionStatus,
         Has<OccupiedByPiece>,
         &AdjacentTiles,
+        Entity,
     )>,
     selected_tiles: Res<SelectedLogTiles>,
     log_pieces: Query<(
         &OccupiesTile,
         &FacingDirection,
-        Has<CommandPoint>,
+        Has<SpawnPoint>,
         Has<PieceForSale>,
+        &LogPieceOwnedByPlayer,
+        Has<WinCondition>,
     )>,
     active_piece: Res<ActiveLogPiece>,
     active_player: Res<ActivePlayer>,
@@ -501,7 +524,7 @@ fn evaluate_tiles(
     };
 
     if selected_tiles.as_read_only_list().len() >= selection_count_bounds.0.max_tiles {
-        for (mut selection_state, _, _) in tiles.iter_mut() {
+        for (mut selection_state, ..) in tiles.iter_mut() {
             selection_state.try_make_ineligble();
         }
         return Ok(());
@@ -509,12 +532,12 @@ fn evaluate_tiles(
 
     match eligibility_method {
         EligibilityDeterminationMethod::AllTiles => {
-            for (mut selection_state, _, _) in tiles.iter_mut() {
+            for (mut selection_state, ..) in tiles.iter_mut() {
                 selection_state.try_make_eligible();
             }
         }
         EligibilityDeterminationMethod::AllPieces => {
-            for (mut selection_state, is_occupied, _) in tiles.iter_mut() {
+            for (mut selection_state, is_occupied, ..) in tiles.iter_mut() {
                 if is_occupied {
                     selection_state.try_make_eligible();
                 } else {
@@ -523,7 +546,7 @@ fn evaluate_tiles(
             }
         }
         EligibilityDeterminationMethod::UnoccupiedTiles => {
-            for (mut selection_state, is_occupied, _) in tiles.iter_mut() {
+            for (mut selection_state, is_occupied, ..) in tiles.iter_mut() {
                 if !is_occupied {
                     selection_state.try_make_eligible();
                 } else {
@@ -533,7 +556,7 @@ fn evaluate_tiles(
         }
         EligibilityDeterminationMethod::PieceChain => {
             if selected_tiles.as_read_only_list().is_empty() {
-                for (mut selection_state, is_occupied, _) in tiles.iter_mut() {
+                for (mut selection_state, is_occupied, ..) in tiles.iter_mut() {
                     if is_occupied {
                         selection_state.try_make_eligible();
                     } else {
@@ -541,12 +564,12 @@ fn evaluate_tiles(
                     }
                 }
             } else {
-                for (mut selection_state, _, _) in tiles.iter_mut() {
+                for (mut selection_state, ..) in tiles.iter_mut() {
                     selection_state.try_make_ineligble();
                 }
 
                 for log_tile in selected_tiles.as_read_only_list() {
-                    let Ok((_, _, adjacents)) = tiles.get(*log_tile) else {
+                    let Ok((_, _, adjacents, ..)) = tiles.get(*log_tile) else {
                         error!("A tile had no adjacent tiles component");
                         continue;
                     };
@@ -556,7 +579,7 @@ fn evaluate_tiles(
                             continue;
                         };
 
-                        let Ok((mut selection_state, is_occupied, _)) =
+                        let Ok((mut selection_state, is_occupied, ..)) =
                             tiles.get_mut(adjacent_tile)
                         else {
                             error!("An entity listed as adjacent to a tile was not a tile");
@@ -603,7 +626,7 @@ fn evaluate_tiles(
             for _ in 0..depth {
                 for tile in eligible_tiles.clone() {
                     for direction in &directional_indices_of_fan {
-                        let Ok((_, _, adjacents)) = tiles.get(tile) else {
+                        let Ok((_, _, adjacents, ..)) = tiles.get(tile) else {
                             panic!()
                         };
 
@@ -638,22 +661,117 @@ fn evaluate_tiles(
                 }
             }
         }
-        EligibilityDeterminationMethod::GeneralSpawning => {
-            // let Ok(owned_pieces) = players.get(active_player.0) else {
-            //     return;
-            // };
-            // let player_command_points = owned_pieces.list().iter().filter_map(|piece| {
-            //     let (OccupiesTile { log_tile }, _, is_spawn_point) = log_pieces.get(*piece).ok()?;
+        EligibilityDeterminationMethod::GeneralSpawning { depth } => {
+            let tiles_close_enough_to_friendly_spawn_point = {
+                let mut basis_tiles: Vec<Entity> = players
+                    .get(active_player.0)
+                    .ok()
+                    .unwrap_or(&OwnsLogPieces::non_component_default())
+                    .iter()
+                    .filter_map(|piece| {
+                        let (tile, _, is_spawn_point, ..) = log_pieces.get(piece).ok()?;
+                        is_spawn_point.then_some(tile.log_tile)
+                    })
+                    .collect();
 
-            // });
-            todo!()
+                for _ in 0..depth {
+                    for tile in basis_tiles.clone() {
+                        basis_tiles.extend(
+                            tiles
+                                .get(tile)?
+                                .2
+                                .0
+                                .iter()
+                                .filter_map(|maybe_adjacent| *maybe_adjacent),
+                        );
+                    }
+                }
+                basis_tiles
+            };
+
+            let tiles_around_unfriendly_spawn_points: Vec<Entity> = {
+                let mut basis_tiles = Vec::new();
+
+                for tile in log_pieces.iter().filter_map(
+                    |(
+                        OccupiesTile { log_tile },
+                        _,
+                        is_spawn_point,
+                        _,
+                        LogPieceOwnedByPlayer(owner),
+                        ..,
+                    )| {
+                        (is_spawn_point && *owner != active_player.0).then_some(*log_tile)
+                    },
+                ) {
+                    basis_tiles.extend(
+                        tiles
+                            .get(tile)?
+                            .2
+                            .0
+                            .iter()
+                            .filter_map(|maybe_adjacent| *maybe_adjacent),
+                    );
+                }
+
+                basis_tiles
+            };
+
+            for tile in tiles_close_enough_to_friendly_spawn_point
+                .iter()
+                .filter(|tile| !tiles_around_unfriendly_spawn_points.contains(*tile))
+            {
+                let (mut selection_status, is_occupied, ..) = tiles.get_mut(*tile)?;
+                match is_occupied {
+                    true => selection_status.try_make_ineligble(),
+                    false => selection_status.try_make_eligible(),
+                }
+            }
         }
         EligibilityDeterminationMethod::PiecesForSale => {
-            for (OccupiesTile { log_tile }, _, _, for_sale) in log_pieces.iter() {
+            for (OccupiesTile { log_tile }, _, _, for_sale, ..) in log_pieces.iter() {
                 if for_sale {
                     tiles.get_mut(*log_tile)?.0.try_make_eligible();
                 } else {
                     tiles.get_mut(*log_tile)?.0.try_make_ineligble();
+                }
+            }
+        }
+        EligibilityDeterminationMethod::TowerSpawning => {
+            let tiles_adjacent_to_enemy_win_conditions = {
+                let mut basis_tiles = Vec::new();
+
+                for tile in log_pieces.iter().filter_map(
+                    |(
+                        OccupiesTile { log_tile },
+                        ..,
+                        LogPieceOwnedByPlayer(owner),
+                        is_win_condit,
+                    )| {
+                        (is_win_condit && *owner != active_player.0).then_some(*log_tile)
+                    },
+                ) {
+                    basis_tiles.extend(
+                        tiles
+                            .get(tile)?
+                            .2
+                            .0
+                            .iter()
+                            .filter_map(|maybe_adjacent| *maybe_adjacent),
+                    );
+                }
+
+                basis_tiles
+            };
+
+            for (mut selection_state, is_occupied, ..) in tiles
+                .iter_mut()
+                .filter(|(.., tile)| !tiles_adjacent_to_enemy_win_conditions.contains(tile))
+            {
+                if is_occupied {
+                    selection_state.try_make_ineligble();
+                } else {
+                    selection_state.try_make_eligible();
                 }
             }
         }
