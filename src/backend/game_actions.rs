@@ -219,6 +219,7 @@ pub enum ActionSource {
     Card { inventory_index: usize },
     Order { index_in_piece_orders: usize },
     OrphanPiecePurchasing,
+    InitialPieceRotation,
 }
 
 #[derive(Debug, Resource, Default)]
@@ -873,6 +874,7 @@ pub mod dangerous_selection_mechanics {
                     super::ActionSource::Card { .. } => commands.trigger(SetPieceToActive(None)),
                     super::ActionSource::Order { .. } => (),
                     super::ActionSource::OrphanPiecePurchasing => (),
+                    super::ActionSource::InitialPieceRotation => (),
                 }
             }
         }

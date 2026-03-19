@@ -20,7 +20,7 @@ impl Plugin for PlayersPlugin {
             (create_basic_players, create_ghost_player).in_set(BackEndSystems),
         );
 
-        app.add_observer(switch_player);
+        app.add_observer(validate_switch_request);
         app.add_observer(check_if_player_dead_or_game_over);
         app.add_message::<CreatedLogPlayer>();
 
@@ -29,13 +29,15 @@ impl Plugin for PlayersPlugin {
             remove_resource_with_player_creation_instructions.in_set(ClearBackendData),
         );
 
+        app.add_systems(EndTurn, replenish_piece_orders);
+
         app.add_systems(
             StartTurn,
             (calculate_player_orders_this_turn, passive_income),
         );
         app.add_observer(sell_pieces);
 
-        //TMP systems!!!
+        //These functions prevent issues where assets are not yet loaded. This could be done better, but the goal is to see if the game is fun, not polish it.
         app.add_systems(Update, tmp_update_and_check_start_delay);
         app.add_systems(SetUpBoard, tmp_add_start_turn_delay_timer);
     }
@@ -121,25 +123,30 @@ pub struct StartTurn;
 #[derive(Debug, Event)]
 pub struct SwitchPlayerRequest;
 
-fn switch_player(
+fn validate_switch_request(
     _request: On<SwitchPlayerRequest>,
+    active_player: Res<ActivePlayer>,
+    mut commands: Commands,
+    players: Query<&PlayerState>,
+) -> Result<(), BevyError> {
+    if *players.get(active_player.0)? != PlayerState::HasNoTowerYet {
+        commands.run_schedule(EndTurn);
+        commands.run_system_cached(switch_player);
+        commands.run_schedule(StartTurn);
+    }
+
+    Ok(())
+}
+
+fn switch_player(
     mut commands: Commands,
     players: Query<(&PlayerTurnOrder, &PlayerState)>,
     mut active: ResMut<ActivePlayer>,
 ) -> Result<(), BevyError> {
-    let (
-        PlayerTurnOrder {
-            next_player: ideal_next_player,
-        },
-        current_player_life_state,
-    ) = players.get(active.0)?;
-
-    if *current_player_life_state == PlayerState::HasNoTowerYet {
-        return Ok(());
-    }
+    let ideal_next_player = players.get(active.0)?.0.next_player;
 
     let next_player = {
-        let mut current_candidate = *ideal_next_player;
+        let mut current_candidate = ideal_next_player;
 
         loop {
             let (
@@ -162,11 +169,6 @@ fn switch_player(
     }
 
     active.0 = next_player;
-
-    commands.run_system_cached(replenish_piece_orders);
-
-    commands.run_schedule(StartTurn);
-
     Ok(())
 }
 
@@ -306,3 +308,6 @@ fn passive_income(
     coins.get_mut(active_player.0)?.give_passive_income();
     Ok(())
 }
+
+#[derive(Debug, ScheduleLabel, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
+pub struct EndTurn;

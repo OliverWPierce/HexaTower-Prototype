@@ -70,6 +70,13 @@ const ORPHAN_PURCHASE_COLOR_PALETTE: ButtonColorSet = ButtonColorSet {
     unready_fill: Color::Srgba(tailwind::EMERALD_900),
 };
 
+const INITIAL_PIECE_ROTATION: ButtonColorSet = ButtonColorSet {
+    ready_border: Color::Srgba(tailwind::AMBER_800),
+    unready_border: Color::Srgba(tailwind::AMBER_950),
+    ready_fill: Color::Srgba(tailwind::AMBER_600),
+    unready_fill: Color::Srgba(tailwind::AMBER_900),
+};
+
 #[derive(Debug, Component)]
 struct ExecuteActionButton;
 
@@ -121,12 +128,14 @@ fn update_button(
             ActionSource::Card { .. } => CARD_COLOR_PALETTE,
             ActionSource::Order { .. } => ORDER_COLOR_PALETTE,
             ActionSource::OrphanPiecePurchasing => ORPHAN_PURCHASE_COLOR_PALETTE,
+            ActionSource::InitialPieceRotation => INITIAL_PIECE_ROTATION,
         };
 
         let display_text = match source {
             ActionSource::Card { .. } => Text::new("Play Card"),
             ActionSource::Order { .. } => Text::new("Order"),
             ActionSource::OrphanPiecePurchasing => Text::new("Purchase"),
+            ActionSource::InitialPieceRotation => Text::new("Rotate"),
         };
 
         if currently_selected.as_read_only_list().len() < action.bounds().min_tiles {

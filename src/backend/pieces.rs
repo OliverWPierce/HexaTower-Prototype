@@ -10,7 +10,7 @@ use crate::backend::{
         ActionSource, Bounds, ExecuteSelectedAction, GameAction, GameDesignBounds, ProxyAction,
         SetActionTo, dangerous_selection_mechanics::SelectLogTile, execute_action_functionality,
     },
-    players::{CheckForWinner, PlayerState, StartTurn},
+    players::{CheckForWinner, EndTurn, PlayerState, StartTurn},
     shop::ChangePlayerCoinsBy,
     tiles::AdjacentTiles,
 };
@@ -41,6 +41,8 @@ impl Plugin for PiecesPlugin {
         );
 
         app.add_systems(StartTurn, clear_active.in_set(BackEndSystems));
+
+        app.add_systems(EndTurn, clear_new_spawns);
 
         app.add_observer(set_active_piece);
         app.add_message::<DamagePiece>();
@@ -314,7 +316,7 @@ fn spawn_logpiece(
             let logpiece_ent = commands
                 .spawn((
                     LogPieceOwnedByPlayer(*player),
-                    OrdersPerTurn { max: 1, current: 1 },
+                    OrdersPerTurn { max: 1, current: 0 },
                     OccupiesTile {
                         log_tile: *log_tile,
                     },
@@ -325,6 +327,7 @@ fn spawn_logpiece(
                     },
                     PieceOrders(piece_instructions.default_orders.clone()),
                     MonataryValue(piece_instructions.default_coin_value),
+                    NewSpawn,
                 ))
                 .id();
 
@@ -378,7 +381,7 @@ fn set_active_piece(
     new_piece: On<SetPieceToActive>,
     mut current_piece: ResMut<ActiveLogPiece>,
     mut commands: Commands,
-    sale_info: Query<&OccupiesTile, With<PieceForSale>>,
+    special_cases_info: Query<(&OccupiesTile, Has<PieceForSale>, Has<NewSpawn>)>,
 ) {
     if new_piece.0.is_none() {
         current_piece.0 = None;
@@ -393,20 +396,41 @@ fn set_active_piece(
     } else {
         current_piece.0 = new_piece.0;
 
-        if let Ok(tile_occupied) = sale_info.get(new_piece.0.unwrap()) {
-            commands.trigger(SetActionTo::Action {
-                action: GameAction {
-                    functionality: super::game_actions::ActionFunctionality::PurchasePiece,
-                    eligibility_method:
-                        super::game_actions::EligibilityDeterminationMethod::PiecesForSale,
-                    selection_count_bounds: GameDesignBounds(Bounds {
-                        min_tiles: 1,
-                        max_tiles: 1,
-                    }),
-                },
-                source: ActionSource::OrphanPiecePurchasing,
-            });
-            commands.trigger(SelectLogTile(tile_occupied.log_tile));
+        if let Ok((tile_occupied, is_for_sale, is_new_piece)) =
+            special_cases_info.get(new_piece.0.unwrap())
+        {
+            if is_for_sale {
+                commands.trigger(SetActionTo::Action {
+                    action: GameAction {
+                        functionality: super::game_actions::ActionFunctionality::PurchasePiece,
+                        eligibility_method:
+                            super::game_actions::EligibilityDeterminationMethod::PiecesForSale,
+                        selection_count_bounds: GameDesignBounds(Bounds {
+                            min_tiles: 1,
+                            max_tiles: 1,
+                        }),
+                    },
+                    source: ActionSource::OrphanPiecePurchasing,
+                });
+                commands.trigger(SelectLogTile(tile_occupied.log_tile));
+            } else if is_new_piece {
+                commands.trigger(SetActionTo::Action {
+                    action: GameAction {
+                        functionality: super::game_actions::ActionFunctionality::RotateSelf,
+                        eligibility_method:
+                            super::game_actions::EligibilityDeterminationMethod::Fan {
+                                width: super::game_actions::FanWidth::All,
+                                depth: 1,
+                                occupied_or_not: super::game_actions::OccupationStatus::Either,
+                            },
+                        selection_count_bounds: GameDesignBounds(Bounds {
+                            min_tiles: 1,
+                            max_tiles: 1,
+                        }),
+                    },
+                    source: ActionSource::InitialPieceRotation,
+                });
+            }
         } else {
             commands.trigger(SetActionTo::None);
         }
@@ -539,4 +563,13 @@ pub struct PieceForSale;
 #[derive(Debug, Event)]
 pub struct PieceOwnerChanged {
     pub piece: Entity,
+}
+
+#[derive(Debug, Component)]
+pub struct NewSpawn;
+
+fn clear_new_spawns(mut commands: Commands, new_pieces: Query<Entity, With<NewSpawn>>) {
+    for piece in new_pieces {
+        commands.entity(piece).remove::<NewSpawn>();
+    }
 }

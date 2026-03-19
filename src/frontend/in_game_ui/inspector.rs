@@ -8,8 +8,8 @@ use crate::{
         cards::Card,
         game_parameters::SetUpBoard,
         pieces::{
-            ActiveLogPiece, Health, LogPieceOwnedByPlayer, MonataryValue, Order, OrdersPerTurn,
-            PieceOrders,
+            ActiveLogPiece, Health, LogPieceOwnedByPlayer, MonataryValue, NewSpawn, Order,
+            OrdersPerTurn, PieceOrders,
         },
     },
     frontend::{
@@ -221,6 +221,7 @@ fn inspect_piece(
         &LogPieceOwnedByPlayer,
         &OrdersPerTurn,
         &MonataryValue,
+        Has<NewSpawn>,
     )>,
     player_vis_data: Query<(&DisplayName, &DataForPlayer)>,
 ) {
@@ -228,7 +229,7 @@ fn inspect_piece(
         return;
     };
 
-    let Ok((health_data, commanding_player, order_stats, monatary_value)) =
+    let Ok((health_data, commanding_player, order_stats, monatary_value, is_new)) =
         log_pieces.get(log_piece_ent.0)
     else {
         error!("The visual piece did not point to a logical piece");
@@ -308,7 +309,28 @@ fn inspect_piece(
             }
         )],
     ));
-
+    if is_new {
+        commands.spawn((
+            ChildOf(inspector),
+            Node {
+                width: Val::Percent(90.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            children![(
+                Text::new("New spawn"),
+                TextFont {
+                    font_size: 16.0,
+                    ..default()
+                },
+                TextLayout {
+                    justify: Justify::Center,
+                    linebreak: LineBreak::WordBoundary
+                }
+            )],
+        ));
+    }
     commands.spawn((
         ChildOf(inspector),
         Node {
