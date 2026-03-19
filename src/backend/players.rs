@@ -286,6 +286,7 @@ fn sell_pieces(
     dead_player: On<PlayerDied>,
     owned_pieces: Query<&OwnsLogPieces>,
     ghost_player: Single<Entity, With<GhostPlayer>>,
+    mut piece_orders: Query<&mut OrdersPerTurn>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
     let ghost_ent = ghost_player.entity();
@@ -296,6 +297,8 @@ fn sell_pieces(
             piece: *piece,
             to_player: ghost_ent,
         });
+
+        piece_orders.get_mut(*piece)?.current = 0;
     }
 
     Ok(())
