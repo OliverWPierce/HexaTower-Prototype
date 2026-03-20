@@ -9,7 +9,7 @@ impl Plugin for TmpCamAndLights {
     fn build(&self, app: &mut App) {
         app.add_systems(SetUpBoard, (lights, cam_3d, ui_cam));
         app.add_systems(SetUpBoard, initial_resize_event.after(cam_3d));
-        app.add_systems(Update, resize_3d_viewport);
+        app.add_systems(Update, (resize_3d_viewport, move_3d_cam));
     }
 }
 #[derive(Debug, Component)]
@@ -123,4 +123,22 @@ fn initial_resize_event(
             height: window.height(),
         });
     }
+}
+
+fn move_3d_cam(
+    inputs: Res<ButtonInput<KeyCode>>,
+    camera: Single<&mut Transform, With<Camera3d>>,
+    time: Res<Time>,
+) {
+    const VERT_SPEED: f32 = 1.2;
+    const HORIZONTAL_SPEED: f32 = 0.7;
+
+    camera.into_inner().translation += Vec3 {
+        x: (inputs.pressed(KeyCode::KeyD) as i8 - inputs.pressed(KeyCode::KeyA) as i8) as f32
+            * HORIZONTAL_SPEED,
+        y: (inputs.pressed(KeyCode::Space) as i8 - inputs.pressed(KeyCode::ShiftLeft) as i8) as f32
+            * VERT_SPEED,
+        z: (inputs.pressed(KeyCode::KeyS) as i8 - inputs.pressed(KeyCode::KeyW) as i8) as f32
+            * HORIZONTAL_SPEED,
+    } * time.delta_secs();
 }
