@@ -190,7 +190,7 @@ fn initialize_player_shop_data(players: Query<Entity, With<PlayerMarker>>, mut c
     for player in players {
         commands.entity(player).insert((
             CoinBag {
-                coins: 19,
+                coins: 24,
                 passive_income: 1,
             },
             PlayerShopSetsInfo {

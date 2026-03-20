@@ -1,0 +1,10 @@
+ProxyOrder (
+    name: "Disappearing Act!",
+    proxy_action: ProxyAction (
+        functionality: SwapSelf,
+        eligibility_method: FriendlyPieces,
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
+        ),
+    description: "Swap positions with a friendly piece.",
+    icon_path: "orders/icons/Magic Staff.png"
+)

@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{gizmos::gizmos::Swap, prelude::*};
 
 use bevy::asset::AssetLoader;
 use serde::{Deserialize, Serialize};
@@ -359,7 +359,7 @@ fn spawn_logpiece(
 pub struct LogPieceDespawned(pub Entity);
 
 fn send_despawn_notifications(
-    mut despawned_logical_pieces: RemovedComponents<OccupiesTile>,
+    mut despawned_logical_pieces: RemovedComponents<LogPieceOwnedByPlayer>,
     mut despawns: MessageWriter<LogPieceDespawned>,
 ) {
     for logical_piece in despawned_logical_pieces.read() {
@@ -571,5 +571,37 @@ pub struct NewSpawn;
 fn clear_new_spawns(mut commands: Commands, new_pieces: Query<Entity, With<NewSpawn>>) {
     for piece in new_pieces {
         commands.entity(piece).remove::<NewSpawn>();
+    }
+}
+
+// pub fn swap_pieces(p1: Entity, p2: Entity, commands: &mut Commands) {
+//     commands.queue(|world: &mut World| {
+//         world.entity_mut(p1.clone()).remove::<OccupiesTile>();
+//     });
+// }
+
+pub struct PiecesToSwap(pub Entity, pub Entity);
+
+impl Command for PiecesToSwap {
+    fn apply(self, world: &mut World) -> () {
+        let p1_tile = world
+            .get::<OccupiesTile>(self.0)
+            .expect("piece had no tile")
+            .log_tile;
+        let p2_tile = world
+            .get::<OccupiesTile>(self.1)
+            .expect("piece had no tile")
+            .log_tile;
+
+        world.entity_mut(self.0).remove::<OccupiesTile>();
+        world
+            .entity_mut(self.1)
+            .insert(OccupiesTile { log_tile: p1_tile });
+        world
+            .entity_mut(self.0)
+            .insert(OccupiesTile { log_tile: p2_tile });
+
+        world.write_message(PieceMoved(self.0));
+        world.write_message(PieceMoved(self.1));
     }
 }

@@ -8,8 +8,8 @@ use crate::backend::{
     pieces::{
         ActiveLogPiece, DamagePiece, DamageType, FacingDirection, LogPieceOwnedByPlayer,
         MonataryValue, MovePiece, OccupiedByPiece, OccupiesTile, OrdersPerTurn, OwnsLogPieces,
-        Piece, PieceForSale, RotatePiece, SpawnLogPiece, SpawnPoint, TransferPieceOwnership,
-        WinCondition,
+        Piece, PieceForSale, PiecesToSwap, RotatePiece, SpawnLogPiece, SpawnPoint,
+        TransferPieceOwnership, WinCondition,
     },
     players::{ActivePlayer, PlayerOrdersRemaining, StartTurn},
     shop::{ChangePlayerCoinsBy, ChangePlayerPassiveCoinsBy, CoinBag},
@@ -75,6 +75,7 @@ enum ProxyActionFunctionality {
     MoveSelf,
     RotateSelf,
     ChangeActivePlayerPassiveIncomeBy(i32),
+    SwapSelf,
 }
 
 #[derive(Debug, Deserialize, Serialize, Reflect, Clone, Copy)]
@@ -94,6 +95,7 @@ enum ProxyDeterminationMethod {
         depth: u32,
     },
     TowerSpawn,
+    FriendlyPieces,
 }
 
 impl GameAction {
@@ -117,6 +119,7 @@ impl GameAction {
             ProxyActionFunctionality::ChangeActivePlayerPassiveIncomeBy(coins) => {
                 ActionFunctionality::IncreaseActivePlayerPassiveIncomeBy(coins)
             }
+            ProxyActionFunctionality::SwapSelf => ActionFunctionality::SwapSelfWithPiece,
         };
 
         let converted_action_method = match proxy.eligibility_method {
@@ -145,6 +148,9 @@ impl GameAction {
                 EligibilityDeterminationMethod::GeneralSpawning { depth }
             }
             ProxyDeterminationMethod::TowerSpawn => EligibilityDeterminationMethod::TowerSpawning,
+            ProxyDeterminationMethod::FriendlyPieces => {
+                EligibilityDeterminationMethod::FriendlyPieces
+            }
         };
 
         GameAction {
@@ -171,6 +177,7 @@ pub enum ActionFunctionality {
     RotateSelf,
     PurchasePiece,
     IncreaseActivePlayerPassiveIncomeBy(i32),
+    SwapSelfWithPiece,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -190,6 +197,7 @@ pub enum EligibilityDeterminationMethod {
     },
     PiecesForSale,
     TowerSpawning,
+    FriendlyPieces,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize, Reflect, Copy)]
@@ -308,6 +316,10 @@ impl SelectionBounds for ActionFunctionality {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
+            ActionFunctionality::SwapSelfWithPiece => Bounds {
+                min_tiles: 1,
+                max_tiles: 1,
+            },
         }
     }
 }
@@ -351,6 +363,10 @@ impl SelectionBounds for EligibilityDeterminationMethod {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
+            EligibilityDeterminationMethod::FriendlyPieces => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
         }
     }
 }
@@ -371,6 +387,7 @@ impl RequiresActivePiece for EligibilityDeterminationMethod {
             EligibilityDeterminationMethod::GeneralSpawning { .. } => false,
             EligibilityDeterminationMethod::PiecesForSale => false,
             EligibilityDeterminationMethod::TowerSpawning => false,
+            EligibilityDeterminationMethod::FriendlyPieces => false,
         }
     }
 }
@@ -387,6 +404,7 @@ impl RequiresActivePiece for ActionFunctionality {
             ActionFunctionality::RotateSelf => true,
             ActionFunctionality::PurchasePiece => false,
             ActionFunctionality::IncreaseActivePlayerPassiveIncomeBy(_) => false,
+            ActionFunctionality::SwapSelfWithPiece => true,
         }
     }
 }
@@ -496,6 +514,15 @@ pub fn execute_action_functionality(
         }
         ActionFunctionality::IncreaseActivePlayerPassiveIncomeBy(coins) => {
             commands.trigger(ChangePlayerPassiveCoinsBy(coins, active_player.0));
+        }
+        ActionFunctionality::SwapSelfWithPiece => {
+            let swap = PiecesToSwap(
+                map_tile_to_piece
+                    .get(*selected_tiles.as_read_only_list().first().unwrap())?
+                    .log_piece(),
+                active_piece.0.unwrap(),
+            );
+            commands.queue(|world: &mut World| swap.apply(world));
         }
     }
 
@@ -787,6 +814,21 @@ fn evaluate_tiles(
                 } else {
                     selection_state.try_make_eligible();
                 }
+            }
+        }
+        EligibilityDeterminationMethod::FriendlyPieces => {
+            let friendly_player = match active_piece.0 {
+                Some(piece) => log_pieces.get(piece)?.4.0,
+                None => active_player.0,
+            };
+
+            for tile in players
+                .get(friendly_player)?
+                .list()
+                .iter()
+                .filter_map(|piece| Some(log_pieces.get(*piece).ok()?.0.log_tile))
+            {
+                tiles.get_mut(tile)?.0.try_make_eligible();
             }
         }
     }
