@@ -1,13 +1,13 @@
 ProxyOrder (
-    name: "Smack!",
+    name: "Fairy Magic!",
     proxy_action: ProxyAction (
         functionality: ChangePieceHealth (
-            change_method: Constant(30),
-            is_heal: false,
+            change_method: Constant(20),
+            is_heal: true,
         ),
         eligibility_method: Fan (width: All, depth: 1, occupied_or_not: Occupied),
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
         ),
-    description: "Attack an ajacent piece for 30 damage",
-    icon_path: "orders/icons/sword.png"
+    description: "Heal an adjacent piece for 20 health.",
+    icon_path: "orders/icons/heart_plus.png"
 )

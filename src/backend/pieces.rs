@@ -1,4 +1,4 @@
-use bevy::{gizmos::gizmos::Swap, prelude::*};
+use bevy::prelude::*;
 
 use bevy::asset::AssetLoader;
 use serde::{Deserialize, Serialize};
@@ -45,7 +45,7 @@ impl Plugin for PiecesPlugin {
         app.add_systems(EndTurn, clear_new_spawns);
 
         app.add_observer(set_active_piece);
-        app.add_message::<DamagePiece>();
+        app.add_message::<AlterPieceHealth>();
         app.add_message::<PieceMoved>();
         app.add_observer(rotate_piece);
         app.add_observer(move_piece);
@@ -438,28 +438,30 @@ fn set_active_piece(
 }
 
 #[derive(Debug, Message)]
-pub struct DamagePiece {
+pub struct AlterPieceHealth {
     pub log_piece: Entity,
-    pub method: DamageType,
+    pub method: DamageOrHealType,
     pub source_player: Option<Entity>,
+    pub is_heal: bool,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Reflect, Deserialize)]
-pub enum DamageType {
+pub enum DamageOrHealType {
     Constant(u32),
     FractionOfMissing(f32),
     FractionOfMax(f32),
 }
 
 fn damage_piece(
-    mut reader: MessageReader<DamagePiece>,
+    mut reader: MessageReader<AlterPieceHealth>,
     mut pieces: Query<(&mut Health, Has<WinCondition>, &MonataryValue)>,
     mut commands: Commands,
 ) {
-    for DamagePiece {
+    for AlterPieceHealth {
         log_piece,
         method,
         source_player,
+        is_heal,
     } in reader.read()
     {
         let Ok((mut health, win_condition, value)) = pieces.get_mut(*log_piece) else {
@@ -467,15 +469,16 @@ fn damage_piece(
             return;
         };
 
-        let base_damage = match *method {
-            DamageType::Constant(damage) => damage as f32,
-            DamageType::FractionOfMissing(fraction) => {
+        let base_change = match *method {
+            DamageOrHealType::Constant(damage) => damage as f32,
+            DamageOrHealType::FractionOfMissing(fraction) => {
                 (health.max_health - health.current_health) as f32 * fraction
             }
-            DamageType::FractionOfMax(fraction) => health.max_health as f32 * fraction,
-        };
+            DamageOrHealType::FractionOfMax(fraction) => health.max_health as f32 * fraction,
+        } * (*is_heal as i8 * 2 - 1) as f32;
 
-        let new_health = (health.current_health as f32 - base_damage).clamp(0.0, f32::MAX) as u32;
+        let new_health = (health.current_health as f32 + base_change)
+            .clamp(0.0, health.max_health as f32) as u32;
 
         if new_health == 0 {
             commands.entity(*log_piece).despawn();
@@ -574,16 +577,10 @@ fn clear_new_spawns(mut commands: Commands, new_pieces: Query<Entity, With<NewSp
     }
 }
 
-// pub fn swap_pieces(p1: Entity, p2: Entity, commands: &mut Commands) {
-//     commands.queue(|world: &mut World| {
-//         world.entity_mut(p1.clone()).remove::<OccupiesTile>();
-//     });
-// }
-
 pub struct PiecesToSwap(pub Entity, pub Entity);
 
 impl Command for PiecesToSwap {
-    fn apply(self, world: &mut World) -> () {
+    fn apply(self, world: &mut World) {
         let p1_tile = world
             .get::<OccupiesTile>(self.0)
             .expect("piece had no tile")

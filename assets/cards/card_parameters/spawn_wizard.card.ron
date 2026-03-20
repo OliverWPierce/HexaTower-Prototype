@@ -1,14 +1,14 @@
 ProxyCard (
     name: "Wizard Genesis",
-    price: 10,
+    price: 8,
     action: ProxyAction (
         functionality: SpawnPiece(
             path_to_proxy_piece: "pieces/piece_parameters/wizard.piece.ron",
         ),
         eligibility_method: GeneralSpawning ( depth: 1 ),
-        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 2)),
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
         ),
     image_path: "cards/card_images/WizardSpawn.png",
     rarity: Common,
-    description: "Spawn Two Wizards on any unnoccupied tile."
+    description: "Spawn a Wizard on any unnoccupied tile."
 )

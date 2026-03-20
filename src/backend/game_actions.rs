@@ -6,7 +6,7 @@ use crate::backend::{
     game_actions::dangerous_selection_mechanics::{SelectedLogTiles, TileSelectionStatus},
     game_parameters::SetUpBoard,
     pieces::{
-        ActiveLogPiece, DamagePiece, DamageType, FacingDirection, LogPieceOwnedByPlayer,
+        ActiveLogPiece, AlterPieceHealth, DamageOrHealType, FacingDirection, LogPieceOwnedByPlayer,
         MonataryValue, MovePiece, OccupiedByPiece, OccupiesTile, OrdersPerTurn, OwnsLogPieces,
         Piece, PieceForSale, PiecesToSwap, RotatePiece, SpawnLogPiece, SpawnPoint,
         TransferPieceOwnership, WinCondition,
@@ -68,10 +68,17 @@ pub struct ProxyAction {
 #[derive(Debug, Deserialize, Serialize, Reflect, Clone)]
 enum ProxyActionFunctionality {
     DeleteTile,
-    SpawnPiece { path_to_proxy_piece: String },
-    DoubleTakeTest { path_to_proxy_piece: String },
+    SpawnPiece {
+        path_to_proxy_piece: String,
+    },
+    DoubleTakeTest {
+        path_to_proxy_piece: String,
+    },
     AlterActivePlayerCoinCount(i32),
-    AttackPiece(DamageType),
+    ChangePieceHealth {
+        change_method: DamageOrHealType,
+        is_heal: bool,
+    },
     MoveSelf,
     RotateSelf,
     ChangeActivePlayerPassiveIncomeBy(i32),
@@ -111,9 +118,13 @@ impl GameAction {
             ProxyActionFunctionality::AlterActivePlayerCoinCount(change) => {
                 ActionFunctionality::AlterActivePlayerCoinCount(change)
             }
-            ProxyActionFunctionality::AttackPiece(damage_type) => {
-                ActionFunctionality::AttackPiece(damage_type)
-            }
+            ProxyActionFunctionality::ChangePieceHealth {
+                change_method,
+                is_heal,
+            } => ActionFunctionality::ChangePieceHealth {
+                change_method,
+                is_heal,
+            },
             ProxyActionFunctionality::MoveSelf => ActionFunctionality::MoveSelfToTile,
             ProxyActionFunctionality::RotateSelf => ActionFunctionality::RotateSelf,
             ProxyActionFunctionality::ChangeActivePlayerPassiveIncomeBy(coins) => {
@@ -171,7 +182,10 @@ pub enum ActionFunctionality {
     SpawnPiece(Handle<Piece>),
     DoubleTakeTest(Handle<Piece>),
     AlterActivePlayerCoinCount(i32),
-    AttackPiece(DamageType),
+    ChangePieceHealth {
+        change_method: DamageOrHealType,
+        is_heal: bool,
+    },
     MoveSelfToTile,
     /// This function assumes that only adjacent tiles can be selected.
     RotateSelf,
@@ -296,7 +310,7 @@ impl SelectionBounds for ActionFunctionality {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
-            ActionFunctionality::AttackPiece(_) => Bounds {
+            ActionFunctionality::ChangePieceHealth { .. } => Bounds {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
@@ -399,7 +413,7 @@ impl RequiresActivePiece for ActionFunctionality {
             ActionFunctionality::SpawnPiece(..) => false,
             ActionFunctionality::DoubleTakeTest(..) => false,
             ActionFunctionality::AlterActivePlayerCoinCount(_) => false,
-            ActionFunctionality::AttackPiece(..) => false,
+            ActionFunctionality::ChangePieceHealth { .. } => false,
             ActionFunctionality::MoveSelfToTile => true,
             ActionFunctionality::RotateSelf => true,
             ActionFunctionality::PurchasePiece => false,
@@ -427,7 +441,7 @@ pub fn execute_action_functionality(
     active_player: Res<ActivePlayer>,
     mut deletions: MessageWriter<DeleteLogTileRequest>,
     mut piece_spawns: MessageWriter<SpawnLogPiece>,
-    mut damage_writer: MessageWriter<DamagePiece>,
+    mut damage_writer: MessageWriter<AlterPieceHealth>,
     mut commands: Commands,
     map_tile_to_piece: Query<&OccupiedByPiece>,
     active_piece: Res<ActiveLogPiece>,
@@ -465,17 +479,21 @@ pub fn execute_action_functionality(
         ActionFunctionality::AlterActivePlayerCoinCount(delta_coins) => {
             commands.trigger(ChangePlayerCoinsBy(delta_coins, active_player.0));
         }
-        ActionFunctionality::AttackPiece(damage_type) => {
+        ActionFunctionality::ChangePieceHealth {
+            change_method,
+            is_heal,
+        } => {
             for log_tile in selected_tiles.as_read_only_list() {
                 let Ok(log_piece) = map_tile_to_piece.get(*log_tile) else {
                     warn!("tried to damage a piece on a tile which itself had no piece.");
                     continue;
                 };
 
-                damage_writer.write(DamagePiece {
+                damage_writer.write(AlterPieceHealth {
                     log_piece: log_piece.log_piece(),
-                    method: damage_type,
+                    method: change_method,
                     source_player: Some(active_player.0),
+                    is_heal,
                 });
             }
         }
