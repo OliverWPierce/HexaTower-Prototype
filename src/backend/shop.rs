@@ -1,5 +1,6 @@
 use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
 use rand::seq::{IndexedRandom, IteratorRandom};
+use serde::{Deserialize, Serialize};
 
 use crate::backend::{
     BackEndSystems,
@@ -55,6 +56,52 @@ pub struct PlayerShopLuckStats {
     pub epic: u32,
     pub rare: u32,
     pub common: u32,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Reflect)]
+pub struct ShopUpgradeTable {
+    common: Option<ShopUpgradeSettings>,
+    rare: Option<ShopUpgradeSettings>,
+    epic: Option<ShopUpgradeSettings>,
+    legendary: Option<ShopUpgradeSettings>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Reflect)]
+pub struct ShopUpgradeSettings {
+    amount: u8,
+    method: LuckUpgradeMethod,
+}
+
+impl PlayerShopLuckStats {
+    pub fn upgrade(&mut self, upgrade_table: ShopUpgradeTable) {
+        if let Some(upgrade) = upgrade_table.common {
+            upgrade.apply_to(&mut self.common);
+        }
+        if let Some(upgrade) = upgrade_table.rare {
+            upgrade.apply_to(&mut self.rare);
+        }
+        if let Some(upgrade) = upgrade_table.epic {
+            upgrade.apply_to(&mut self.epic);
+        }
+        if let Some(upgrade) = upgrade_table.legendary {
+            upgrade.apply_to(&mut self.legendary);
+        }
+    }
+}
+
+impl ShopUpgradeSettings {
+    fn apply_to(self, tickets: &mut u32) {
+        match self.method {
+            LuckUpgradeMethod::Multiplicative => *tickets *= self.amount as u32,
+            LuckUpgradeMethod::Addative => *tickets += self.amount as u32,
+            LuckUpgradeMethod::Subtractive => *tickets -= self.amount as u32,
+        };
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Reflect)]
+pub enum LuckUpgradeMethod {
+    Multiplicative,
+    Addative,
+    Subtractive,
 }
 
 impl Default for PlayerShopLuckStats {

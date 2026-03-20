@@ -12,7 +12,10 @@ use crate::backend::{
         TransferPieceOwnership, WinCondition,
     },
     players::{ActivePlayer, PlayerOrdersRemaining, StartTurn},
-    shop::{ChangePlayerCoinsBy, ChangePlayerPassiveCoinsBy, CoinBag},
+    shop::{
+        ChangePlayerCoinsBy, ChangePlayerPassiveCoinsBy, CoinBag, PlayerShopLuckStats,
+        ShopUpgradeTable,
+    },
     tiles::{
         AdjacentTiles, DeleteLogTileRequest, EssentialTileCreationSystems, LogicalTileCreated,
     },
@@ -83,6 +86,7 @@ enum ProxyActionFunctionality {
     RotateSelf,
     ChangeActivePlayerPassiveIncomeBy(i32),
     SwapSelf,
+    UpgradeSelfShop(ShopUpgradeTable),
 }
 
 #[derive(Debug, Deserialize, Serialize, Reflect, Clone, Copy)]
@@ -131,6 +135,9 @@ impl GameAction {
                 ActionFunctionality::IncreaseActivePlayerPassiveIncomeBy(coins)
             }
             ProxyActionFunctionality::SwapSelf => ActionFunctionality::SwapSelfWithPiece,
+            ProxyActionFunctionality::UpgradeSelfShop(shop_upgrade_table) => {
+                ActionFunctionality::UpgradeSelfShop(shop_upgrade_table)
+            }
         };
 
         let converted_action_method = match proxy.eligibility_method {
@@ -192,6 +199,7 @@ pub enum ActionFunctionality {
     PurchasePiece,
     IncreaseActivePlayerPassiveIncomeBy(i32),
     SwapSelfWithPiece,
+    UpgradeSelfShop(ShopUpgradeTable),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -334,6 +342,10 @@ impl SelectionBounds for ActionFunctionality {
                 min_tiles: 1,
                 max_tiles: 1,
             },
+            ActionFunctionality::UpgradeSelfShop(shop_upgrade_table) => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
         }
     }
 }
@@ -419,6 +431,7 @@ impl RequiresActivePiece for ActionFunctionality {
             ActionFunctionality::PurchasePiece => false,
             ActionFunctionality::IncreaseActivePlayerPassiveIncomeBy(_) => false,
             ActionFunctionality::SwapSelfWithPiece => true,
+            ActionFunctionality::UpgradeSelfShop(..) => false,
         }
     }
 }
@@ -541,6 +554,16 @@ pub fn execute_action_functionality(
                 active_piece.0.unwrap(),
             );
             commands.queue(|world: &mut World| swap.apply(world));
+        }
+        ActionFunctionality::UpgradeSelfShop(shop_upgrade_table) => {
+            let active_player = active_player.0;
+
+            commands.queue(move |world: &mut World| {
+                world
+                    .get_mut::<PlayerShopLuckStats>(active_player)
+                    .unwrap()
+                    .upgrade(shop_upgrade_table);
+            });
         }
     }
 

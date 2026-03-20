@@ -1,0 +1,23 @@
+ProxyCard (
+    name: "Fortuity I",
+    price: 2,
+    action: ProxyAction (
+        functionality: UpgradeSelfShop(ShopUpgradeTable (
+            common: None,
+            rare: Some(ShopUpgradeSettings (
+                amount: 2,
+                method: Addative,
+            )),
+            epic: Some(ShopUpgradeSettings (
+                amount: 1,
+                method: Addative,
+            )),
+            legendary: None,
+        )),
+        eligibility_method: None,
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 0, max_tiles: 0)),
+        ),
+    image_path: "cards/card_images/ShopUpgrade.png",
+    rarity: Common,
+    description: "Add 2 rare tickets and 1 epic ticket to your shop raffle pool."
+)
