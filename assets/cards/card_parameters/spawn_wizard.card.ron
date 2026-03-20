@@ -9,6 +9,6 @@ ProxyCard (
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
         ),
     image_path: "cards/card_images/WizardSpawn.png",
-    rarity: Common,
+    rarity: Epic,
     description: "Spawn a Wizard on any unnoccupied tile."
 )
