@@ -6,10 +6,10 @@ use crate::backend::{
     game_actions::dangerous_selection_mechanics::{SelectedLogTiles, TileSelectionStatus},
     game_parameters::SetUpBoard,
     pieces::{
-        ActiveLogPiece, AlterPieceHealth, DamageOrHealType, FacingDirection, LogPieceOwnedByPlayer,
-        MonataryValue, MovePiece, OccupiedByPiece, OccupiesTile, OrdersPerTurn, OwnsLogPieces,
-        Piece, PieceForSale, PiecesToSwap, RotatePiece, SpawnLogPiece, SpawnPoint,
-        TransferPieceOwnership, WinCondition,
+        ActiveLogPiece, AlterPieceHealth, DamageOrHealType, DamageUpgradePercent, FacingDirection,
+        Health, LogPieceOwnedByPlayer, MonataryValue, MovePiece, OccupiedByPiece, OccupiesTile,
+        OrdersPerTurn, OwnsLogPieces, Piece, PieceForSale, PiecesToSwap, RotatePiece,
+        SpawnLogPiece, SpawnPoint, TransferPieceOwnership, WinCondition,
     },
     players::{ActivePlayer, PlayerOrdersRemaining, StartTurn},
     shop::{
@@ -87,6 +87,10 @@ enum ProxyActionFunctionality {
     ChangeActivePlayerPassiveIncomeBy(i32),
     SwapSelf,
     UpgradeSelfShop(ShopUpgradeTable),
+    UpgradeDamage {
+        fraction: f32,
+    },
+    UpgradeMaxHealth(u32),
 }
 
 #[derive(Debug, Deserialize, Serialize, Reflect, Clone, Copy)]
@@ -137,6 +141,12 @@ impl GameAction {
             ProxyActionFunctionality::SwapSelf => ActionFunctionality::SwapSelfWithPiece,
             ProxyActionFunctionality::UpgradeSelfShop(shop_upgrade_table) => {
                 ActionFunctionality::UpgradeSelfShop(shop_upgrade_table)
+            }
+            ProxyActionFunctionality::UpgradeDamage { fraction } => {
+                ActionFunctionality::UpgradeDamage { fraction }
+            }
+            ProxyActionFunctionality::UpgradeMaxHealth(amount) => {
+                ActionFunctionality::UpgradeHealth { amount }
             }
         };
 
@@ -200,6 +210,12 @@ pub enum ActionFunctionality {
     IncreaseActivePlayerPassiveIncomeBy(i32),
     SwapSelfWithPiece,
     UpgradeSelfShop(ShopUpgradeTable),
+    UpgradeHealth {
+        amount: u32,
+    },
+    UpgradeDamage {
+        fraction: f32,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -342,7 +358,15 @@ impl SelectionBounds for ActionFunctionality {
                 min_tiles: 1,
                 max_tiles: 1,
             },
-            ActionFunctionality::UpgradeSelfShop(shop_upgrade_table) => Bounds {
+            ActionFunctionality::UpgradeSelfShop(..) => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
+            ActionFunctionality::UpgradeHealth { .. } => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
+            ActionFunctionality::UpgradeDamage { .. } => Bounds {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
@@ -432,6 +456,8 @@ impl RequiresActivePiece for ActionFunctionality {
             ActionFunctionality::IncreaseActivePlayerPassiveIncomeBy(_) => false,
             ActionFunctionality::SwapSelfWithPiece => true,
             ActionFunctionality::UpgradeSelfShop(..) => false,
+            ActionFunctionality::UpgradeHealth { .. } => false,
+            ActionFunctionality::UpgradeDamage { .. } => false,
         }
     }
 }
@@ -458,7 +484,7 @@ pub fn execute_action_functionality(
     mut commands: Commands,
     map_tile_to_piece: Query<&OccupiedByPiece>,
     active_piece: Res<ActiveLogPiece>,
-    log_pieces: Query<&MonataryValue>,
+    log_pieces: Query<(&MonataryValue, &DamageUpgradePercent)>,
 ) -> Result<(), BevyError> {
     let Some(GameAction { functionality, .. }) = action.0.clone() else {
         return Ok(());
@@ -502,11 +528,20 @@ pub fn execute_action_functionality(
                     continue;
                 };
 
+                let damge_multiplyer = if let Some(source_piece) = active_piece.0
+                    && !is_heal
+                {
+                    log_pieces.get(source_piece)?.1.0
+                } else {
+                    1.0
+                };
+
                 damage_writer.write(AlterPieceHealth {
                     log_piece: log_piece.log_piece(),
                     method: change_method,
                     source_player: Some(active_player.0),
                     is_heal,
+                    multiplyer: damge_multiplyer,
                 });
             }
         }
@@ -538,7 +573,7 @@ pub fn execute_action_functionality(
                     .remove::<PieceForSale>();
 
                 commands.trigger(ChangePlayerCoinsBy(
-                    -(log_pieces.get(log_tile.log_piece())?.0 as i32),
+                    -(log_pieces.get(log_tile.log_piece())?.0.0 as i32),
                     active_player.0,
                 ));
             }
@@ -564,6 +599,28 @@ pub fn execute_action_functionality(
                     .unwrap()
                     .upgrade(shop_upgrade_table);
             });
+        }
+        ActionFunctionality::UpgradeHealth { amount } => {
+            for piece in selected_tiles
+                .as_read_only_list()
+                .iter()
+                .filter_map(|tile| Some(map_tile_to_piece.get(*tile).ok()?.log_piece()))
+            {
+                commands.queue(move |world: &mut World| {
+                    world.get_mut::<Health>(piece).unwrap().max_health += amount
+                });
+            }
+        }
+        ActionFunctionality::UpgradeDamage { fraction } => {
+            for piece in selected_tiles
+                .as_read_only_list()
+                .iter()
+                .filter_map(|tile| Some(map_tile_to_piece.get(*tile).ok()?.log_piece()))
+            {
+                commands.queue(move |world: &mut World| {
+                    world.get_mut::<DamageUpgradePercent>(piece).unwrap().0 += fraction;
+                });
+            }
         }
     }
 
