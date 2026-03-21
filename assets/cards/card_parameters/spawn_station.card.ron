@@ -1,11 +1,11 @@
 ProxyCard (
     name: "Command Point Alpha Genesis",
-    price: 10,
+    price: 9,
     action: ProxyAction (
         functionality: SpawnPiece(
             path_to_proxy_piece: "pieces/piece_parameters/space_station.piece.ron",
         ),
-        eligibility_method: GeneralSpawning ( depth: 3 ),
+        eligibility_method: GeneralSpawning ( depth: 2 ),
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
         ),
     image_path: "cards/card_images/SpaceStationSpawn.png",

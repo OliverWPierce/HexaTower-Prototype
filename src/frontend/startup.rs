@@ -15,16 +15,16 @@ fn send_game_setup_instructions(mut commands: Commands) {
         board_size: crate::backend::game_parameters::BoardSize::Large,
         player_instructions: PlayersToCreate(vec![
             PlayerCreationInstructions {
-                name: String::from("Elliott"),
+                name: String::from("Gavin"),
                 base_pate_path: String::from("base_plates/ForestGreenPieceBasePlate.glb"),
             },
             PlayerCreationInstructions {
-                name: String::from("Oliver"),
+                name: String::from("Elliott"),
                 base_pate_path: String::from("base_plates/RedPieceBasePlate.glb"),
             },
             PlayerCreationInstructions {
-                name: String::from("Lexi"),
-                base_pate_path: String::from("base_plates/YellowPieceBasePlate.glb"),
+                name: String::from("Oliver"),
+                base_pate_path: String::from("base_plates/PurplePieceBasePlate.glb"),
             },
         ]),
     });
