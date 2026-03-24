@@ -1,6 +1,6 @@
 ProxyCard (
-    name: "Fortuity III",
-    price: 2,
+    name: "Fortuity II",
+    price: 3,
     action: ProxyAction (
         functionality: UpgradeSelfShop(ShopUpgradeTable (
             common: None,
@@ -19,5 +19,5 @@ ProxyCard (
         ),
     image_path: "cards/card_images/ShopUpgrade.png",
     rarity: Epic,
-    description: "Add 3 epic tickets and 1 legendary ticket to your shop raffle pool."
+    description: "Add 5 epic tickets and 1 legendary ticket to your shop raffle pool."
 )

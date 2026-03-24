@@ -8,8 +8,8 @@ use crate::{
         cards::Card,
         game_parameters::SetUpBoard,
         pieces::{
-            ActiveLogPiece, Health, LogPieceOwnedByPlayer, MonataryValue, NewSpawn, Order,
-            OrdersPerTurn, PieceOrders,
+            ActiveLogPiece, DamageUpgradePercent, Health, LogPieceOwnedByPlayer, MonataryValue,
+            NewSpawn, Order, OrdersPerTurn, PieceOrders,
         },
     },
     frontend::{
@@ -210,7 +210,7 @@ pub fn inspect_card(inspector: Entity, commands: &mut Commands, card_data: &Card
         )],
     ));
 }
-
+#[allow(clippy::type_complexity)]
 fn inspect_piece(
     over: On<Pointer<Over>>,
     mut commands: Commands,
@@ -222,6 +222,7 @@ fn inspect_piece(
         &OrdersPerTurn,
         &MonataryValue,
         Has<NewSpawn>,
+        &DamageUpgradePercent,
     )>,
     player_vis_data: Query<(&DisplayName, &DataForPlayer)>,
 ) {
@@ -229,8 +230,14 @@ fn inspect_piece(
         return;
     };
 
-    let Ok((health_data, commanding_player, order_stats, monatary_value, is_new)) =
-        log_pieces.get(log_piece_ent.0)
+    let Ok((
+        health_data,
+        commanding_player,
+        order_stats,
+        monatary_value,
+        is_new,
+        damage_multiplyer,
+    )) = log_pieces.get(log_piece_ent.0)
     else {
         error!("The visual piece did not point to a logical piece");
         return;
@@ -309,6 +316,28 @@ fn inspect_piece(
             }
         )],
     ));
+
+    commands.spawn((
+        ChildOf(inspector),
+        Node {
+            width: Val::Percent(90.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        children![(
+            Text::new(format!("Damage Multiplier: {}", damage_multiplyer.0)),
+            TextFont {
+                font_size: 24.0,
+                ..default()
+            },
+            TextLayout {
+                justify: Justify::Center,
+                linebreak: LineBreak::WordBoundary
+            }
+        )],
+    ));
+
     if is_new {
         commands.spawn((
             ChildOf(inspector),
@@ -392,9 +421,9 @@ fn inspect_piece(
         },
     ));
 
-    let health_bar_hue = (0.35 * health_data.current_health as f32 / health_data.max_health as f32)
-        .clamp(0.0, 0.35)
-        * 360.0;
+    let health_bar_hue: f32 =
+        (0.35 * health_data.current_health as f32 / health_data.max_health as f32).clamp(0.0, 0.35)
+            * 360.0;
 
     commands.spawn((
         ChildOf(health_panel),

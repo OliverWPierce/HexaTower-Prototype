@@ -12,19 +12,15 @@ impl Plugin for StartupEvents {
 
 fn send_game_setup_instructions(mut commands: Commands) {
     commands.trigger(crate::backend::game_parameters::CreateGame {
-        board_size: crate::backend::game_parameters::BoardSize::Large,
+        board_size: crate::backend::game_parameters::BoardSize::Small,
         player_instructions: PlayersToCreate(vec![
             PlayerCreationInstructions {
                 name: String::from("Gavin"),
-                base_pate_path: String::from("base_plates/ForestGreenPieceBasePlate.glb"),
-            },
-            PlayerCreationInstructions {
-                name: String::from("Elliott"),
                 base_pate_path: String::from("base_plates/RedPieceBasePlate.glb"),
             },
             PlayerCreationInstructions {
-                name: String::from("Oliver"),
-                base_pate_path: String::from("base_plates/PurplePieceBasePlate.glb"),
+                name: String::from("Tyce"),
+                base_pate_path: String::from("base_plates/BluePieceBasePlate.glb"),
             },
         ]),
     });

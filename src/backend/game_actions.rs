@@ -91,6 +91,7 @@ enum ProxyActionFunctionality {
         fraction: f32,
     },
     UpgradeMaxHealth(u32),
+    UpgradeOrders(u32),
 }
 
 #[derive(Debug, Deserialize, Serialize, Reflect, Clone, Copy)]
@@ -147,6 +148,9 @@ impl GameAction {
             }
             ProxyActionFunctionality::UpgradeMaxHealth(amount) => {
                 ActionFunctionality::UpgradeHealth { amount }
+            }
+            ProxyActionFunctionality::UpgradeOrders(amount) => {
+                ActionFunctionality::UpgradeOrders(amount)
             }
         };
 
@@ -216,6 +220,7 @@ pub enum ActionFunctionality {
     UpgradeDamage {
         fraction: f32,
     },
+    UpgradeOrders(u32),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -370,6 +375,10 @@ impl SelectionBounds for ActionFunctionality {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
+            ActionFunctionality::UpgradeOrders(_) => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
         }
     }
 }
@@ -458,6 +467,7 @@ impl RequiresActivePiece for ActionFunctionality {
             ActionFunctionality::UpgradeSelfShop(..) => false,
             ActionFunctionality::UpgradeHealth { .. } => false,
             ActionFunctionality::UpgradeDamage { .. } => false,
+            ActionFunctionality::UpgradeOrders(_) => false,
         }
     }
 }
@@ -619,6 +629,17 @@ pub fn execute_action_functionality(
             {
                 commands.queue(move |world: &mut World| {
                     world.get_mut::<DamageUpgradePercent>(piece).unwrap().0 += fraction;
+                });
+            }
+        }
+        ActionFunctionality::UpgradeOrders(orders_gained) => {
+            for piece in selected_tiles
+                .as_read_only_list()
+                .iter()
+                .filter_map(|tile| Some(map_tile_to_piece.get(*tile).ok()?.log_piece()))
+            {
+                commands.queue(move |world: &mut World| {
+                    world.get_mut::<OrdersPerTurn>(piece).unwrap().max += orders_gained;
                 });
             }
         }

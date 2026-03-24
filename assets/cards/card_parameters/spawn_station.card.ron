@@ -9,6 +9,6 @@ ProxyCard (
         selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
         ),
     image_path: "cards/card_images/SpaceStationSpawn.png",
-    rarity: Epic,
+    rarity: Rare,
     description: "Spawn one commands points on any unnoccupied tile."
 )
