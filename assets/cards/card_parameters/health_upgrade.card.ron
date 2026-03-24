@@ -1,0 +1,12 @@
+ProxyCard (
+    name: "Diet",
+    price: 5,
+    action: ProxyAction (
+        functionality: UpgradeMaxHealth (5),
+        eligibility_method: AllPieces,
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
+        ),
+    image_path: "cards/card_images/HealthUpgrade.png",
+    rarity: Epic,
+    description: "Increase a peice's health by 5 points."
+)
