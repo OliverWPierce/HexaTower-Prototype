@@ -3,7 +3,7 @@ use bevy::{prelude::*, time::Stopwatch};
 use crate::{
     backend::{
         game_parameters::SetUpBoard,
-        tiles::{LogTileDeleted, LogicalTileCreated, LogicalTileLocation},
+        tiles::{LogTileDeleted, LogicalTileCreated, LogicalTileLocation, TileType},
     },
     frontend::FrontEndSystems,
 };
@@ -14,12 +14,12 @@ impl Plugin for VisTilesPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             SetUpBoard,
-            (initialize_handles, create_vis_tiles_if_needed).chain(),
+            (initialize_handles, create_vis_tiles_if_needed, add_mesh).chain(),
         );
 
         app.add_systems(
             Update,
-            (delete_vis_tiles, scale_new_spawns).in_set(FrontEndSystems),
+            (delete_vis_tiles, scale_new_spawns, add_mesh).in_set(FrontEndSystems),
         );
     }
 }
@@ -37,7 +37,6 @@ fn create_vis_tiles_if_needed(
     mut reader: MessageReader<LogicalTileCreated>,
     mut commands: Commands,
     log_tiles: Query<&LogicalTileLocation>,
-    basic_hex: Res<BasicHexHandle>,
 ) {
     for (animation_time_offset, log_tile) in reader.read().enumerate() {
         let true_pos = log_tiles
@@ -49,15 +48,38 @@ fn create_vis_tiles_if_needed(
         commands.spawn((
             Transform::default().with_translation(translation),
             VisTileOf(log_tile.0),
-            SceneRoot(basic_hex.0.clone()),
-            Pickable {
-                is_hoverable: true,
-                should_block_lower: true,
-            },
             SpawnningAnimationTimeData {
                 stopwatch: Stopwatch::new(),
                 pretend_start_time: animation_time_offset as f32 / 30.0,
             },
+            InheritedVisibility::VISIBLE,
+        ));
+    }
+}
+
+fn add_mesh(
+    tiles_with_new_type: Query<&TileType, Changed<TileType>>,
+    vis_tiles: Query<(Entity, &VisTileOf)>,
+    mut commands: Commands,
+    handles: Res<HexHandles>,
+) {
+    if tiles_with_new_type.is_empty() {
+        return;
+    }
+
+    for (vis_tile, log_tile) in vis_tiles {
+        let Ok(tile_type) = tiles_with_new_type.get(log_tile.0) else {
+            continue;
+        };
+
+        commands.entity(vis_tile).despawn_children();
+
+        commands.spawn((
+            ChildOf(vis_tile),
+            SceneRoot(match tile_type {
+                TileType::Basic => handles.basic.clone(),
+                TileType::PassiveGold => handles.passive_gold.clone(),
+            }),
         ));
     }
 }
@@ -93,12 +115,16 @@ fn scale_new_spawns(
 }
 
 #[derive(Resource, Debug)]
-struct BasicHexHandle(Handle<Scene>);
+struct HexHandles {
+    basic: Handle<Scene>,
+    passive_gold: Handle<Scene>,
+}
 
 fn initialize_handles(mut commands: Commands, assets: ResMut<AssetServer>) {
-    commands.insert_resource(BasicHexHandle(
-        assets.load(GltfAssetLabel::Scene(0).from_asset("BasicTile.glb")),
-    ));
+    commands.insert_resource(HexHandles {
+        basic: assets.load(GltfAssetLabel::Scene(0).from_asset("tile_models/BasicTile.glb")),
+        passive_gold: assets.load(GltfAssetLabel::Scene(0).from_asset("tile_models/GoldTile.glb")),
+    });
 }
 
 fn delete_vis_tiles(
