@@ -1,6 +1,6 @@
 ProxyCard (
-    name: "Fortuity IV",
-    price: 2,
+    name: "Fortuity III",
+    price: 4,
     action: ProxyAction (
         functionality: UpgradeSelfShop(ShopUpgradeTable (
             common: None,

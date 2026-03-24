@@ -1,0 +1,12 @@
+ProxyCard (
+    name: "Arms Deal",
+    price: 4,
+    action: ProxyAction (
+        functionality: UpgradeDamage (fraction: 0.25),
+        eligibility_method: AllPieces,
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 2)),
+        ),
+    image_path: "cards/card_images/DamageUpgrade.png",
+    rarity: Rare,
+    description: "Increase the damage dealt by up to two pieces by 25%."
+)

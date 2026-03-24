@@ -328,6 +328,7 @@ fn spawn_logpiece(
                     PieceOrders(piece_instructions.default_orders.clone()),
                     MonataryValue(piece_instructions.default_coin_value),
                     NewSpawn,
+                    DamageUpgradePercent(1.0),
                 ))
                 .id();
 
@@ -443,6 +444,7 @@ pub struct AlterPieceHealth {
     pub method: DamageOrHealType,
     pub source_player: Option<Entity>,
     pub is_heal: bool,
+    pub multiplyer: f32,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Reflect, Deserialize)]
@@ -462,6 +464,7 @@ fn damage_piece(
         method,
         source_player,
         is_heal,
+        multiplyer,
     } in reader.read()
     {
         let Ok((mut health, win_condition, value)) = pieces.get_mut(*log_piece) else {
@@ -475,7 +478,8 @@ fn damage_piece(
                 (health.max_health - health.current_health) as f32 * fraction
             }
             DamageOrHealType::FractionOfMax(fraction) => health.max_health as f32 * fraction,
-        } * (*is_heal as i8 * 2 - 1) as f32;
+        } * (*is_heal as i8 * 2 - 1) as f32
+            * multiplyer;
 
         let new_health = (health.current_health as f32 + base_change)
             .clamp(0.0, health.max_health as f32) as u32;
@@ -602,3 +606,5 @@ impl Command for PiecesToSwap {
         world.write_message(PieceMoved(self.1));
     }
 }
+#[derive(Debug, Component)]
+pub struct DamageUpgradePercent(pub f32);

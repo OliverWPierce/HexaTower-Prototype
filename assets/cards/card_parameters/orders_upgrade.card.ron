@@ -1,0 +1,12 @@
+ProxyCard (
+    name: "Multitasker",
+    price: 5,
+    action: ProxyAction (
+        functionality: UpgradeOrders (1),
+        eligibility_method: AllPieces,
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
+        ),
+    image_path: "cards/card_images/Dot.png",
+    rarity: Epic,
+    description: "Permanently increase the number of orders a peice can receive in a single turn."
+)
