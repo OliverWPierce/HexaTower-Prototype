@@ -225,6 +225,7 @@ pub mod hex_grid_tools {
 pub enum TileType {
     Basic,
     PassiveGold,
+    Portal,
 }
 
 fn gold_tile_passive(

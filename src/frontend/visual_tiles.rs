@@ -79,6 +79,7 @@ fn add_mesh(
             SceneRoot(match tile_type {
                 TileType::Basic => handles.basic.clone(),
                 TileType::PassiveGold => handles.passive_gold.clone(),
+                TileType::Portal => handles.portal.clone(),
             }),
         ));
     }
@@ -118,12 +119,14 @@ fn scale_new_spawns(
 struct HexHandles {
     basic: Handle<Scene>,
     passive_gold: Handle<Scene>,
+    portal: Handle<Scene>,
 }
 
 fn initialize_handles(mut commands: Commands, assets: ResMut<AssetServer>) {
     commands.insert_resource(HexHandles {
         basic: assets.load(GltfAssetLabel::Scene(0).from_asset("tile_models/BasicTile.glb")),
         passive_gold: assets.load(GltfAssetLabel::Scene(0).from_asset("tile_models/GoldTile.glb")),
+        portal: assets.load(GltfAssetLabel::Scene(0).from_asset("tile_models/TeleportTile.glb")),
     });
 }
 
