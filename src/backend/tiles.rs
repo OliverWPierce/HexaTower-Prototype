@@ -1,8 +1,12 @@
 use bevy::prelude::*;
 pub use hex_grid_tools::ADJACENTS;
+use serde::{Deserialize, Serialize};
 
 use crate::backend::BackEndSystems;
 use crate::backend::game_parameters::{BoardSize, SetUpBoard};
+use crate::backend::pieces::{OccupiedByPiece, OwnsLogPieces};
+use crate::backend::players::{ActivePlayer, EndTurn};
+use crate::backend::shop::CoinBag;
 use crate::backend::tiles::hex_grid_tools::{GenerationMode, hex_cords};
 pub struct TilesPlugin;
 
@@ -20,6 +24,8 @@ impl Plugin for TilesPlugin {
                 .in_set(EssentialTileCreationSystems),
         );
         app.add_systems(Update, delete_tiles.in_set(BackEndSystems));
+
+        app.add_systems(EndTurn, gold_tile_passive);
     }
 }
 
@@ -75,6 +81,7 @@ fn spawn_tiles(
             .spawn((
                 LogicalTileLocation(*cords),
                 AdjacentTiles([None, None, None, None, None, None]),
+                TileType::Basic,
             ))
             .id();
 
@@ -210,4 +217,29 @@ pub mod hex_grid_tools {
 
         generated
     }
+}
+
+#[derive(
+    Component, PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy, Deserialize, Serialize, Reflect,
+)]
+pub enum TileType {
+    Basic,
+    PassiveGold,
+}
+
+fn gold_tile_passive(
+    tiles: Query<(&OccupiedByPiece, &TileType)>,
+    active_player: Res<ActivePlayer>,
+    mut player_data: Query<(&OwnsLogPieces, &mut CoinBag)>,
+) -> Result<(), BevyError> {
+    let player_peices = player_data.get(active_player.0)?.0.list();
+
+    player_data.get_mut(active_player.0)?.1.coins += tiles
+        .iter()
+        .filter(|(piece, tile_type)| {
+            **tile_type == TileType::PassiveGold && player_peices.contains(&piece.log_piece())
+        })
+        .count() as i32;
+
+    Ok(())
 }

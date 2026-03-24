@@ -18,6 +18,7 @@ use crate::backend::{
     },
     tiles::{
         AdjacentTiles, DeleteLogTileRequest, EssentialTileCreationSystems, LogicalTileCreated,
+        TileType,
     },
 };
 /// Note that it is highly important that nothing about the backend changes between when an action is loaded and when it
@@ -87,6 +88,7 @@ enum ProxyActionFunctionality {
     ChangeActivePlayerPassiveIncomeBy(i32),
     SwapSelf,
     UpgradeSelfShop(ShopUpgradeTable),
+    ConvertTileTo(TileType),
     UpgradeDamage {
         fraction: f32,
     },
@@ -143,6 +145,8 @@ impl GameAction {
             ProxyActionFunctionality::UpgradeSelfShop(shop_upgrade_table) => {
                 ActionFunctionality::UpgradeSelfShop(shop_upgrade_table)
             }
+            ProxyActionFunctionality::ConvertTileTo(tile_type) => {
+                ActionFunctionality::ConvertTileTo(tile_type)
             ProxyActionFunctionality::UpgradeDamage { fraction } => {
                 ActionFunctionality::UpgradeDamage { fraction }
             }
@@ -214,6 +218,7 @@ pub enum ActionFunctionality {
     IncreaseActivePlayerPassiveIncomeBy(i32),
     SwapSelfWithPiece,
     UpgradeSelfShop(ShopUpgradeTable),
+    ConvertTileTo(TileType),
     UpgradeHealth {
         amount: u32,
     },
@@ -367,6 +372,7 @@ impl SelectionBounds for ActionFunctionality {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
+            ActionFunctionality::ConvertTileTo(..) => Bounds {
             ActionFunctionality::UpgradeHealth { .. } => Bounds {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
@@ -465,6 +471,7 @@ impl RequiresActivePiece for ActionFunctionality {
             ActionFunctionality::IncreaseActivePlayerPassiveIncomeBy(_) => false,
             ActionFunctionality::SwapSelfWithPiece => true,
             ActionFunctionality::UpgradeSelfShop(..) => false,
+            ActionFunctionality::ConvertTileTo(..) => false,
             ActionFunctionality::UpgradeHealth { .. } => false,
             ActionFunctionality::UpgradeDamage { .. } => false,
             ActionFunctionality::UpgradeOrders(_) => false,
@@ -610,6 +617,14 @@ pub fn execute_action_functionality(
                     .upgrade(shop_upgrade_table);
             });
         }
+        ActionFunctionality::ConvertTileTo(tile_type) => {
+            let tiles_with_type = selected_tiles
+                .as_read_only_list()
+                .clone()
+                .into_iter()
+                .map(move |ent| (ent, tile_type));
+
+            commands.insert_batch(tiles_with_type);
         ActionFunctionality::UpgradeHealth { amount } => {
             for piece in selected_tiles
                 .as_read_only_list()
