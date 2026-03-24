@@ -129,6 +129,7 @@ fn update_button(
             ActionSource::Order { .. } => ORDER_COLOR_PALETTE,
             ActionSource::OrphanPiecePurchasing => ORPHAN_PURCHASE_COLOR_PALETTE,
             ActionSource::InitialPieceRotation => INITIAL_PIECE_ROTATION,
+            ActionSource::TileOrder => ORDER_COLOR_PALETTE,
         };
 
         let display_text = match source {
@@ -136,6 +137,7 @@ fn update_button(
             ActionSource::Order { .. } => Text::new("Order"),
             ActionSource::OrphanPiecePurchasing => Text::new("Purchase"),
             ActionSource::InitialPieceRotation => Text::new("Rotate"),
+            ActionSource::TileOrder => Text::new("Order"),
         };
 
         if currently_selected.as_read_only_list().len() < action.bounds().min_tiles {

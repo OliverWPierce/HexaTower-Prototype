@@ -147,6 +147,7 @@ impl GameAction {
             }
             ProxyActionFunctionality::ConvertTileTo(tile_type) => {
                 ActionFunctionality::ConvertTileTo(tile_type)
+            }
             ProxyActionFunctionality::UpgradeDamage { fraction } => {
                 ActionFunctionality::UpgradeDamage { fraction }
             }
@@ -276,6 +277,7 @@ pub enum ActionSource {
     Order { index_in_piece_orders: usize },
     OrphanPiecePurchasing,
     InitialPieceRotation,
+    TileOrder,
 }
 
 #[derive(Debug, Resource, Default)]
@@ -373,6 +375,9 @@ impl SelectionBounds for ActionFunctionality {
                 max_tiles: usize::MAX,
             },
             ActionFunctionality::ConvertTileTo(..) => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
             ActionFunctionality::UpgradeHealth { .. } => Bounds {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
@@ -625,6 +630,7 @@ pub fn execute_action_functionality(
                 .map(move |ent| (ent, tile_type));
 
             commands.insert_batch(tiles_with_type);
+        }
         ActionFunctionality::UpgradeHealth { amount } => {
             for piece in selected_tiles
                 .as_read_only_list()
@@ -1051,6 +1057,7 @@ pub mod dangerous_selection_mechanics {
                     super::ActionSource::Order { .. } => (),
                     super::ActionSource::OrphanPiecePurchasing => (),
                     super::ActionSource::InitialPieceRotation => (),
+                    super::ActionSource::TileOrder => (),
                 }
             }
         }
