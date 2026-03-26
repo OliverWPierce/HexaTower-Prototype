@@ -3,6 +3,7 @@ pub use hex_grid_tools::ADJACENTS;
 use serde::{Deserialize, Serialize};
 
 use crate::backend::BackEndSystems;
+use crate::backend::game_actions::{ActionFunctionality, Bounds, GameAction, GameDesignBounds};
 use crate::backend::game_parameters::{BoardSize, SetUpBoard};
 use crate::backend::pieces::{OccupiedByPiece, OwnsLogPieces};
 use crate::backend::players::{ActivePlayer, EndTurn};
@@ -243,4 +244,22 @@ fn gold_tile_passive(
         .count() as i32;
 
     Ok(())
+}
+
+impl TileType {
+    pub fn to_action(self) -> Option<GameAction> {
+        match self {
+            TileType::Basic => None,
+            TileType::PassiveGold => None,
+            TileType::Portal => Some(GameAction {
+                functionality: ActionFunctionality::MoveSelfToTile,
+                eligibility_method:
+                    crate::backend::game_actions::EligibilityDeterminationMethod::VacantTeleportTiles,
+                selection_count_bounds: GameDesignBounds(Bounds {
+                    min_tiles: 1,
+                    max_tiles: 1,
+                }),
+            }),
+        }
+    }
 }
