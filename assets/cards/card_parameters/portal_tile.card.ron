@@ -1,6 +1,6 @@
 ProxyCard (
     name: "Rift",
-    price: 6,
+    price: 5,
     action: ProxyAction (
         functionality: ConvertTileTo(Portal),
         eligibility_method: AllTiles,

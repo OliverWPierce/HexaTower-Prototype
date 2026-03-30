@@ -241,7 +241,8 @@ fn gold_tile_passive(
         .filter(|(piece, tile_type)| {
             **tile_type == TileType::PassiveGold && player_peices.contains(&piece.log_piece())
         })
-        .count() as i32;
+        .count() as i32
+        * 4;
 
     Ok(())
 }
