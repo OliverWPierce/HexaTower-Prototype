@@ -1,0 +1,12 @@
+ProxyCard (
+    name: "Rift",
+    price: 5,
+    action: ProxyAction (
+        functionality: ConvertTileTo(Portal),
+        eligibility_method: AllTiles,
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
+        ),
+    image_path: "cards/card_images/TeleportTile.png",
+    rarity: Rare,
+    description: "Open a portal on this tile. Any peice occupying a portal tile can use the portal to teleport to another vacant portal, at the cost of one order."
+)

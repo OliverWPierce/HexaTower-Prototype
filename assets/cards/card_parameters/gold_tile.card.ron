@@ -1,12 +1,12 @@
 ProxyCard (
     name: "Gold tile",
-    price: 2,
+    price: 5,
     action: ProxyAction (
         functionality: ConvertTileTo(PassiveGold),
         eligibility_method: AllTiles,
-        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 2)),
+        selection_count_bounds: GameDesignBounds(Bounds(min_tiles: 1, max_tiles: 1)),
         ),
     image_path: "cards/card_images/GoldTile.png",
-    rarity: Common,
-    description: "Enchant a tile into a gold tile. At then end of your turn, any gold tiles you occupy will generate 1 gold each."
+    rarity: Epic,
+    description: "Enchant a tile into a gold tile. At then end of your turn, any gold tiles you occupy will generate 4 gold each."
 )

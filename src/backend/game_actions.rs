@@ -114,6 +114,7 @@ enum ProxyDeterminationMethod {
     },
     TowerSpawn,
     FriendlyPieces,
+    VacantPortalTiles,
 }
 
 impl GameAction {
@@ -147,6 +148,7 @@ impl GameAction {
             }
             ProxyActionFunctionality::ConvertTileTo(tile_type) => {
                 ActionFunctionality::ConvertTileTo(tile_type)
+            }
             ProxyActionFunctionality::UpgradeDamage { fraction } => {
                 ActionFunctionality::UpgradeDamage { fraction }
             }
@@ -186,6 +188,9 @@ impl GameAction {
             ProxyDeterminationMethod::TowerSpawn => EligibilityDeterminationMethod::TowerSpawning,
             ProxyDeterminationMethod::FriendlyPieces => {
                 EligibilityDeterminationMethod::FriendlyPieces
+            }
+            ProxyDeterminationMethod::VacantPortalTiles => {
+                EligibilityDeterminationMethod::VacantTeleportTiles
             }
         };
 
@@ -246,6 +251,7 @@ pub enum EligibilityDeterminationMethod {
     PiecesForSale,
     TowerSpawning,
     FriendlyPieces,
+    VacantTeleportTiles,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize, Reflect, Copy)]
@@ -276,6 +282,7 @@ pub enum ActionSource {
     Order { index_in_piece_orders: usize },
     OrphanPiecePurchasing,
     InitialPieceRotation,
+    TileOrder,
 }
 
 #[derive(Debug, Resource, Default)]
@@ -373,6 +380,9 @@ impl SelectionBounds for ActionFunctionality {
                 max_tiles: usize::MAX,
             },
             ActionFunctionality::ConvertTileTo(..) => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
             ActionFunctionality::UpgradeHealth { .. } => Bounds {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
@@ -432,6 +442,10 @@ impl SelectionBounds for EligibilityDeterminationMethod {
                 min_tiles: 0,
                 max_tiles: usize::MAX,
             },
+            EligibilityDeterminationMethod::VacantTeleportTiles => Bounds {
+                min_tiles: 0,
+                max_tiles: usize::MAX,
+            },
         }
     }
 }
@@ -453,6 +467,7 @@ impl RequiresActivePiece for EligibilityDeterminationMethod {
             EligibilityDeterminationMethod::PiecesForSale => false,
             EligibilityDeterminationMethod::TowerSpawning => false,
             EligibilityDeterminationMethod::FriendlyPieces => false,
+            EligibilityDeterminationMethod::VacantTeleportTiles => false,
         }
     }
 }
@@ -625,6 +640,7 @@ pub fn execute_action_functionality(
                 .map(move |ent| (ent, tile_type));
 
             commands.insert_batch(tiles_with_type);
+        }
         ActionFunctionality::UpgradeHealth { amount } => {
             for piece in selected_tiles
                 .as_read_only_list()
@@ -675,6 +691,7 @@ fn evaluate_tiles(
         Has<OccupiedByPiece>,
         &AdjacentTiles,
         Entity,
+        &TileType,
     )>,
     selected_tiles: Res<SelectedLogTiles>,
     log_pieces: Query<(
@@ -941,7 +958,7 @@ fn evaluate_tiles(
 
             for (mut selection_state, is_occupied, ..) in tiles
                 .iter_mut()
-                .filter(|(.., tile)| !tiles_adjacent_to_enemy_win_conditions.contains(tile))
+                .filter(|(.., tile, _)| !tiles_adjacent_to_enemy_win_conditions.contains(tile))
             {
                 if is_occupied {
                     selection_state.try_make_ineligble();
@@ -964,6 +981,14 @@ fn evaluate_tiles(
             {
                 tiles.get_mut(tile)?.0.try_make_eligible();
             }
+        }
+        EligibilityDeterminationMethod::VacantTeleportTiles => {
+            tiles
+                .iter_mut()
+                .filter_map(|(selection, is_occupied, .., tile_type)| {
+                    (*tile_type == TileType::Portal && !is_occupied).then_some(selection)
+                })
+                .for_each(|mut status| status.try_make_eligible());
         }
     }
 
@@ -1051,6 +1076,7 @@ pub mod dangerous_selection_mechanics {
                     super::ActionSource::Order { .. } => (),
                     super::ActionSource::OrphanPiecePurchasing => (),
                     super::ActionSource::InitialPieceRotation => (),
+                    super::ActionSource::TileOrder => (),
                 }
             }
         }
@@ -1111,11 +1137,7 @@ fn validate_execution_request(
 
     let otherwise_allowed = match source {
         ActionSource::Order { .. } => {
-            let Some(piece) = active_piece.0 else {
-                warn!("tried to execute an order but there was no active piece.");
-                //its not really "ok" but since this issue isn't worth panicking over I don't want to emit a bevy error. In the future, this could be fixed with my own error type.
-                return Ok(());
-            };
+            let piece = active_piece.0.ok_or("expected an active piece")?;
 
             let (
                 OrdersPerTurn {
@@ -1146,6 +1168,22 @@ fn validate_execution_request(
                     })
                     .sum::<u32>() as i32
         }
+        ActionSource::TileOrder => {
+            let piece = active_piece.0.ok_or("expected an active piece")?;
+
+            let (
+                OrdersPerTurn {
+                    current: piece_orders_remaining,
+                    ..
+                },
+                LogPieceOwnedByPlayer(owner),
+                _,
+            ) = piece_info.get(piece)?;
+
+            player_info.get(active_plyer.0)?.0.0 > 0
+                && *piece_orders_remaining > 0
+                && *owner == active_plyer.0
+        }
         _ => true,
     };
 
@@ -1166,12 +1204,21 @@ fn modify_orders_remaining(
     mut player_orders: Query<&mut PlayerOrdersRemaining>,
     mut piece_orders: Query<&mut OrdersPerTurn>,
 ) -> Result<(), BevyError> {
-    if let Some(source) = current_source.0
-        && let ActionSource::Order { .. } = source
-        && let Some(piece) = active_piece.0
-    {
-        player_orders.get_mut(active_player.0)?.0 -= 1;
-        piece_orders.get_mut(piece)?.current -= 1;
+    match current_source.0.ok_or("expected an action source")? {
+        ActionSource::Order { .. } => {
+            piece_orders
+                .get_mut(active_piece.0.ok_or("expected an active_peiece")?)?
+                .current -= 1;
+            player_orders.get_mut(active_player.0)?.0 -= 1;
+            Ok(())
+        }
+        ActionSource::TileOrder => {
+            piece_orders
+                .get_mut(active_piece.0.ok_or("expected an active_peiece")?)?
+                .current -= 1;
+            player_orders.get_mut(active_player.0)?.0 -= 1;
+            Ok(())
+        }
+        _ => Ok(()),
     }
-    Ok(())
 }
